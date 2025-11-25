@@ -140,22 +140,10 @@ Each adapter handles:
 - Model: Full names (Claude Sonnet 4)
 - Unique fields: argument-hint, handoffs, target, mcp-servers
 
-### Stub Adapters
+### Adding New Adapters
 
-**CodexAdapter** (`adapters/codex.py`)
-- Format: JSON
-- File: `.codex/modes.json`
-- Structure: Nested object with tools as boolean flags
-
-**WindsurfAdapter** (`adapters/windsurf.py`)
-- Format: Markdown files
-- Location: `.windsurf/memories/` and `.windsurf/rules/`
-- Structure: Constitutional framework with NEVER/ALWAYS rules
-
-**ContinueAdapter** (`adapters/continue_dev.py`)
-- Format: YAML
-- File: `.continue/config.yaml`
-- Structure: Multi-model configuration
+Use `adapters/example.py` as a template for implementing new format adapters.
+See the ExampleAdapter class for detailed implementation guidance.
 
 ## Information Preservation
 
@@ -239,7 +227,7 @@ See `tests/` directory for test structure.
 - Deprecate `sync_custom_agents.py`
 
 ### Phase 3: New Features
-- Implement Codex, Windsurf, Cursor adapters
+- Add new format adapters as needed (use example.py template)
 - Add permission sync
 - Add prompt sync
 
