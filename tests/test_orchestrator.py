@@ -7,19 +7,17 @@ Tests cover:
 - Conflict resolution
 - Sync execution
 - State tracking
-
-Status: IMPLEMENTED (TDD Phase 1 - Tests written, some may fail until implementation)
 """
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import patch
 import time
 
 from core.orchestrator import UniversalSyncOrchestrator, FilePair
 from core.registry import FormatRegistry
 from core.state_manager import SyncStateManager
-from core.canonical_models import ConfigType, CanonicalAgent
+from core.canonical_models import ConfigType
 from adapters import ClaudeAdapter, CopilotAdapter
 
 
