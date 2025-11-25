@@ -14,7 +14,7 @@ that works with any formats through the adapter interface.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -159,16 +159,52 @@ class UniversalSyncOrchestrator:
             self.log("  Mode: DRY RUN (no changes will be made)")
         print()
 
-        # TODO: Implement sync logic
-        # pairs = self._discover_file_pairs()
-        # for pair in pairs:
-        #     action = self._determine_action(pair)
-        #     if action == 'conflict': handle conflict
-        #     self._execute_sync_action(pair, action)
-        # self.state_manager.save()
-        # self._print_summary()
+        # Discover file pairs
+        pairs = self._discover_file_pairs()
 
-        raise NotImplementedError("Sync logic to be implemented")
+        if not pairs:
+            print("No files found in either directory.")
+            self._print_summary()
+            return
+
+        # Process each pair
+        for pair in pairs:
+            action = self._determine_action(pair)
+
+            if action == 'skip':
+                if self.verbose:
+                    print(f"  Skip: {pair.base_name} (no changes)")
+                self.stats['skipped'] += 1
+                continue
+
+            if action == 'conflict':
+                self.stats['conflicts'] += 1
+                resolved_action = self._resolve_conflict(pair)
+                if not resolved_action:
+                    print(f"  Skip: {pair.base_name} (conflict skipped)")
+                    self.stats['skipped'] += 1
+                    continue
+                action = resolved_action
+
+            # Display action being performed
+            action_display = {
+                'source_to_target': f"{self.source_format} -> {self.target_format}",
+                'target_to_source': f"{self.target_format} -> {self.source_format}",
+                'delete_target': f"Delete from {self.target_format}",
+                'delete_source': f"Delete from {self.source_format}"
+            }
+            prefix = "[DRY-RUN] " if self.dry_run else ""
+            print(f"{prefix}{pair.base_name}: {action_display.get(action, action)}")
+
+            # Execute the sync action
+            self._execute_sync_action(pair, action)
+
+        # Save state (unless dry run)
+        if not self.dry_run:
+            self.state_manager.save()
+
+        # Print summary
+        self._print_summary()
 
     def _discover_file_pairs(self) -> List[FilePair]:
         """
@@ -177,8 +213,51 @@ class UniversalSyncOrchestrator:
         Returns:
             List of FilePair objects representing matched files
         """
-        # TODO: Implement file discovery and matching
-        raise NotImplementedError("File discovery to be implemented")
+        files_by_base_name: Dict[str, Dict[str, Any]] = {}
+
+        # Discover source files
+        source_extension = self.source_adapter.file_extension
+        source_pattern = f"*{source_extension}"
+        for file_path in self.source_dir.glob(source_pattern):
+            if not self.source_adapter.can_handle(file_path):
+                continue
+            base_name = self._extract_base_name(file_path, source_extension)
+            files_by_base_name[base_name] = {
+                'source_path': file_path,
+                'source_mtime': file_path.stat().st_mtime,
+                'target_path': None,
+                'target_mtime': None
+            }
+
+        # Discover target files
+        target_extension = self.target_adapter.file_extension
+        target_pattern = f"*{target_extension}"
+        for file_path in self.target_dir.glob(target_pattern):
+            if not self.target_adapter.can_handle(file_path):
+                continue
+            base_name = self._extract_base_name(file_path, target_extension)
+            if base_name in files_by_base_name:
+                files_by_base_name[base_name]['target_path'] = file_path
+                files_by_base_name[base_name]['target_mtime'] = file_path.stat().st_mtime
+            else:
+                files_by_base_name[base_name] = {
+                    'source_path': None,
+                    'source_mtime': None,
+                    'target_path': file_path,
+                    'target_mtime': file_path.stat().st_mtime
+                }
+
+        # Convert to FilePair list, sorted by base name
+        return [
+            FilePair(
+                base_name=name,
+                source_path=data['source_path'],
+                target_path=data['target_path'],
+                source_mtime=data['source_mtime'],
+                target_mtime=data['target_mtime']
+            )
+            for name, data in sorted(files_by_base_name.items())
+        ]
 
     def _determine_action(self, pair: FilePair) -> str:
         """
@@ -191,11 +270,73 @@ class UniversalSyncOrchestrator:
             Action string: 'source_to_target', 'target_to_source', 'conflict',
                           'delete_target', 'delete_source', or 'skip'
         """
-        # TODO: Implement action determination logic
-        # Check state manager for last sync
-        # Compare modification times
-        # Detect conflicts
-        raise NotImplementedError("Action determination to be implemented")
+        file_state = self.state_manager.get_file_state(
+            self.source_dir, self.target_dir, pair.base_name
+        )
+
+        # DELETION: Source was deleted (state shows it existed, target still exists)
+        if not pair.source_path and pair.target_path and file_state and file_state.get('source_mtime'):
+            if self.direction in ['both', 'source-to-target']:
+                return 'delete_target'
+            return 'skip'
+
+        # DELETION: Target was deleted (state shows it existed, source still exists)
+        if not pair.target_path and pair.source_path and file_state and file_state.get('target_mtime'):
+            if self.direction in ['both', 'target-to-source']:
+                return 'delete_source'
+            return 'skip'
+
+        # BOTH DELETED: Both files gone but state exists
+        if not pair.source_path and not pair.target_path:
+            return 'skip'
+
+        # NEW FILE: Source only (no target, no prior state)
+        if pair.source_path and not pair.target_path:
+            if self.direction in ['both', 'source-to-target']:
+                return 'source_to_target'
+            return 'skip'
+
+        # NEW FILE: Target only (no source, no prior state)
+        if pair.target_path and not pair.source_path:
+            if self.direction in ['both', 'target-to-source']:
+                return 'target_to_source'
+            return 'skip'
+
+        # BOTH FILES EXIST
+        if pair.source_path and pair.target_path:
+            if not file_state:
+                # First sync - use newer file
+                if pair.source_mtime > pair.target_mtime:
+                    if self.direction in ['both', 'source-to-target']:
+                        return 'source_to_target'
+                    return 'skip'
+                elif pair.target_mtime > pair.source_mtime:
+                    if self.direction in ['both', 'target-to-source']:
+                        return 'target_to_source'
+                    return 'skip'
+                return 'skip'  # Same mtime
+
+            # Check changes since last sync
+            last_source_mtime = file_state.get('source_mtime')
+            last_target_mtime = file_state.get('target_mtime')
+
+            source_changed = last_source_mtime is None or pair.source_mtime > last_source_mtime
+            target_changed = last_target_mtime is None or pair.target_mtime > last_target_mtime
+
+            if source_changed and target_changed:
+                return 'conflict'
+
+            if source_changed:
+                if self.direction in ['both', 'source-to-target']:
+                    return 'source_to_target'
+                return 'skip'
+
+            if target_changed:
+                if self.direction in ['both', 'target-to-source']:
+                    return 'target_to_source'
+                return 'skip'
+
+        return 'skip'  # No changes
 
     def _resolve_conflict(self, pair: FilePair) -> Optional[str]:
         """
@@ -207,10 +348,35 @@ class UniversalSyncOrchestrator:
         Returns:
             Resolved action or None to skip
         """
-        # TODO: Implement conflict resolution
-        # If force: use newest file
-        # Else: prompt user
-        raise NotImplementedError("Conflict resolution to be implemented")
+        if self.force:
+            # Use newest file
+            if pair.source_mtime > pair.target_mtime:
+                self.log(f"  Conflict resolved (--force): Using source (newer)")
+                return 'source_to_target'
+            else:
+                self.log(f"  Conflict resolved (--force): Using target (newer)")
+                return 'target_to_source'
+
+        # Interactive mode
+        print(f"\nCONFLICT: Both files modified for '{pair.base_name}'")
+        print(f"  Source: {pair.source_path}")
+        print(f"    Modified: {datetime.fromtimestamp(pair.source_mtime)}")
+        print(f"  Target: {pair.target_path}")
+        print(f"    Modified: {datetime.fromtimestamp(pair.target_mtime)}")
+        print("\nChoose action:")
+        print(f"  1. Use source version ({self.source_format})")
+        print(f"  2. Use target version ({self.target_format})")
+        print("  3. Skip this file")
+
+        while True:
+            choice = input("Enter choice (1/2/3): ").strip()
+            if choice == '1':
+                return 'source_to_target'
+            elif choice == '2':
+                return 'target_to_source'
+            elif choice == '3':
+                return None
+            print("Invalid choice. Enter 1, 2, or 3.")
 
     def _execute_sync_action(self, pair: FilePair, action: str):
         """
@@ -220,13 +386,126 @@ class UniversalSyncOrchestrator:
             pair: FilePair to sync
             action: Action to execute
         """
-        # TODO: Implement sync execution
-        # Read source -> to_canonical -> from_canonical -> write target
-        # Update state manager
-        # Track statistics
-        raise NotImplementedError("Sync execution to be implemented")
+        try:
+            if action == 'source_to_target':
+                # Read source and convert to canonical
+                canonical = self.source_adapter.read(pair.source_path, self.config_type)
+
+                # Determine target path
+                target_path = pair.target_path
+                if target_path is None:
+                    target_path = self.target_dir / f"{pair.base_name}{self.target_adapter.file_extension}"
+
+                # Write to target (unless dry run)
+                if not self.dry_run:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.target_adapter.write(canonical, target_path, self.config_type)
+                    target_mtime = target_path.stat().st_mtime
+                else:
+                    target_mtime = pair.target_mtime
+
+                # Log conversion warnings
+                for warning in self.source_adapter.get_conversion_warnings():
+                    self.log(f"  Warning: {warning}")
+                for warning in self.target_adapter.get_conversion_warnings():
+                    self.log(f"  Warning: {warning}")
+
+                # Update state (unless dry run)
+                if not self.dry_run:
+                    self.state_manager.update_file_state(
+                        self.source_dir, self.target_dir, pair.base_name,
+                        pair.source_mtime, target_mtime, 'source_to_target'
+                    )
+
+                self.stats['source_to_target'] += 1
+
+            elif action == 'target_to_source':
+                # Read target and convert to canonical
+                canonical = self.target_adapter.read(pair.target_path, self.config_type)
+
+                # Determine source path
+                source_path = pair.source_path
+                if source_path is None:
+                    source_path = self.source_dir / f"{pair.base_name}{self.source_adapter.file_extension}"
+
+                # Write to source (unless dry run)
+                if not self.dry_run:
+                    source_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.source_adapter.write(canonical, source_path, self.config_type)
+                    source_mtime = source_path.stat().st_mtime
+                else:
+                    source_mtime = pair.source_mtime
+
+                # Log conversion warnings
+                for warning in self.target_adapter.get_conversion_warnings():
+                    self.log(f"  Warning: {warning}")
+                for warning in self.source_adapter.get_conversion_warnings():
+                    self.log(f"  Warning: {warning}")
+
+                # Update state (unless dry run)
+                if not self.dry_run:
+                    self.state_manager.update_file_state(
+                        self.source_dir, self.target_dir, pair.base_name,
+                        source_mtime, pair.target_mtime, 'target_to_source'
+                    )
+
+                self.stats['target_to_source'] += 1
+
+            elif action == 'delete_target':
+                if not self.dry_run and pair.target_path and pair.target_path.exists():
+                    pair.target_path.unlink()
+                if not self.dry_run:
+                    self.state_manager.remove_file_state(
+                        self.source_dir, self.target_dir, pair.base_name
+                    )
+                self.stats['deletions'] += 1
+
+            elif action == 'delete_source':
+                if not self.dry_run and pair.source_path and pair.source_path.exists():
+                    pair.source_path.unlink()
+                if not self.dry_run:
+                    self.state_manager.remove_file_state(
+                        self.source_dir, self.target_dir, pair.base_name
+                    )
+                self.stats['deletions'] += 1
+
+        except Exception as e:
+            print(f"  Error syncing {pair.base_name}: {e}")
+            self.stats['errors'] += 1
 
     def log(self, message: str):
         """Print message if verbose mode enabled."""
         if self.verbose:
             print(message)
+
+    def _print_summary(self):
+        """Print sync statistics summary."""
+        print()
+        print("=" * 60)
+        print("Summary:")
+        print(f"  {self.source_format} -> {self.target_format}: {self.stats['source_to_target']}")
+        print(f"  {self.target_format} -> {self.source_format}: {self.stats['target_to_source']}")
+        print(f"  Deletions:  {self.stats['deletions']}")
+        print(f"  Conflicts:  {self.stats['conflicts']}")
+        print(f"  Skipped:    {self.stats['skipped']}")
+        print(f"  Errors:     {self.stats['errors']}")
+        print("=" * 60)
+        if self.dry_run:
+            print()
+            print("This was a dry run. Use without --dry-run to apply changes.")
+
+    def _extract_base_name(self, file_path: Path, extension: str) -> str:
+        """
+        Extract base name from file, handling compound extensions like .agent.md.
+
+        Args:
+            file_path: Path to the file
+            extension: The extension to remove (e.g., '.md' or '.agent.md')
+
+        Returns:
+            Base name without the extension
+        """
+        name = file_path.name
+        if extension.startswith('.') and name.endswith(extension):
+            return name[:-len(extension)]
+        return file_path.stem
