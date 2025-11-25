@@ -8,31 +8,178 @@ Tests cover:
 - Sync execution
 - State tracking
 
-Status: STUB - To be implemented
+Status: IMPLEMENTED (TDD Phase 1 - Tests written, some may fail until implementation)
 """
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
+import time
 
 from core.orchestrator import UniversalSyncOrchestrator, FilePair
 from core.registry import FormatRegistry
 from core.state_manager import SyncStateManager
-from core.canonical_models import ConfigType
+from core.canonical_models import ConfigType, CanonicalAgent
 from adapters import ClaudeAdapter, CopilotAdapter
 
 
 class TestFilePair:
     """Tests for FilePair dataclass."""
 
-    def test_create_file_pair(self):
-        """Test creating FilePair instance."""
-        # TODO: Implement
-        pass
+    def test_create_file_pair_with_all_fields(self):
+        """Test creating FilePair with all fields populated."""
+        source = Path("/source/agent.md")
+        target = Path("/target/agent.agent.md")
+
+        pair = FilePair(
+            base_name="agent",
+            source_path=source,
+            target_path=target,
+            source_mtime=1000.0,
+            target_mtime=2000.0
+        )
+
+        assert pair.base_name == "agent"
+        assert pair.source_path == source
+        assert pair.target_path == target
+        assert pair.source_mtime == 1000.0
+        assert pair.target_mtime == 2000.0
+
+    def test_create_file_pair_source_only(self):
+        """Test creating FilePair with only source file."""
+        pair = FilePair(
+            base_name="new-agent",
+            source_path=Path("/source/new-agent.md"),
+            target_path=None,
+            source_mtime=1000.0,
+            target_mtime=None
+        )
+
+        assert pair.base_name == "new-agent"
+        assert pair.source_path is not None
+        assert pair.target_path is None
+        assert pair.target_mtime is None
+
+    def test_create_file_pair_target_only(self):
+        """Test creating FilePair with only target file."""
+        pair = FilePair(
+            base_name="orphan-agent",
+            source_path=None,
+            target_path=Path("/target/orphan-agent.agent.md"),
+            source_mtime=None,
+            target_mtime=2000.0
+        )
+
+        assert pair.source_path is None
+        assert pair.target_path is not None
+        assert pair.source_mtime is None
 
 
-class TestUniversalSyncOrchestrator:
-    """Tests for UniversalSyncOrchestrator."""
+class TestUniversalSyncOrchestratorInit:
+    """Tests for UniversalSyncOrchestrator initialization."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    def test_create_orchestrator(self, registry, state_manager, tmp_path):
+        """Test creating orchestrator with valid parameters."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=True
+        )
+
+        assert orchestrator.source_format == 'claude'
+        assert orchestrator.target_format == 'copilot'
+        assert orchestrator.config_type == ConfigType.AGENT
+        assert orchestrator.dry_run is True
+        assert orchestrator.source_adapter is not None
+        assert orchestrator.target_adapter is not None
+
+    def test_invalid_source_format_raises_error(self, registry, state_manager, tmp_path):
+        """Test that invalid source format raises ValueError."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        with pytest.raises(ValueError, match="Unknown source format"):
+            UniversalSyncOrchestrator(
+                source_dir=source_dir,
+                target_dir=target_dir,
+                source_format='invalid_format',
+                target_format='copilot',
+                config_type=ConfigType.AGENT,
+                format_registry=registry,
+                state_manager=state_manager
+            )
+
+    def test_invalid_target_format_raises_error(self, registry, state_manager, tmp_path):
+        """Test that invalid target format raises ValueError."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        with pytest.raises(ValueError, match="Unknown target format"):
+            UniversalSyncOrchestrator(
+                source_dir=source_dir,
+                target_dir=target_dir,
+                source_format='claude',
+                target_format='invalid_format',
+                config_type=ConfigType.AGENT,
+                format_registry=registry,
+                state_manager=state_manager
+            )
+
+    def test_stats_initialized(self, registry, state_manager, tmp_path):
+        """Test that stats dictionary is properly initialized."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager
+        )
+
+        assert orchestrator.stats['source_to_target'] == 0
+        assert orchestrator.stats['target_to_source'] == 0
+        assert orchestrator.stats['deletions'] == 0
+        assert orchestrator.stats['conflicts'] == 0
+        assert orchestrator.stats['skipped'] == 0
+        assert orchestrator.stats['errors'] == 0
+
+
+class TestDiscoverFilePairs:
+    """Tests for _discover_file_pairs method."""
 
     @pytest.fixture
     def registry(self):
@@ -67,45 +214,1381 @@ class TestUniversalSyncOrchestrator:
             dry_run=True
         )
 
-    def test_create_orchestrator(self, orchestrator):
-        """Test creating orchestrator."""
-        # TODO: Implement
-        # assert orchestrator.source_format == 'claude'
-        # assert orchestrator.target_format == 'copilot'
-        pass
+    def test_discover_empty_directories(self, orchestrator):
+        """Test discovery with empty directories."""
+        pairs = orchestrator._discover_file_pairs()
+        assert pairs == []
 
-    def test_invalid_format_raises_error(self, registry, state_manager, tmp_path):
-        """Test that invalid format raises error."""
-        # TODO: Implement
-        # with pytest.raises(ValueError):
-        #     UniversalSyncOrchestrator(
-        #         source_dir=tmp_path,
-        #         target_dir=tmp_path,
-        #         source_format='invalid',
-        #         target_format='copilot',
-        #         ...
-        #     )
-        pass
+    def test_discover_source_only_files(self, orchestrator):
+        """Test discovery when files only exist in source."""
+        # Create source file
+        source_file = orchestrator.source_dir / "test-agent.md"
+        source_file.write_text("""---
+name: test-agent
+description: Test agent
+---
+Instructions.
+""")
 
-    def test_discover_file_pairs(self, orchestrator):
-        """Test file pair discovery."""
-        # TODO: Implement
-        # Create some test files
-        # pairs = orchestrator._discover_file_pairs()
-        # assert len(pairs) > 0
-        pass
+        pairs = orchestrator._discover_file_pairs()
 
-    def test_determine_action_new_source(self, orchestrator):
-        """Test action determination for new source file."""
-        # TODO: Implement
-        pass
+        assert len(pairs) == 1
+        assert pairs[0].base_name == "test-agent"
+        assert pairs[0].source_path == source_file
+        assert pairs[0].target_path is None
+
+    def test_discover_target_only_files(self, orchestrator):
+        """Test discovery when files only exist in target."""
+        # Create target file
+        target_file = orchestrator.target_dir / "orphan-agent.agent.md"
+        target_file.write_text("""---
+name: orphan-agent
+description: Orphan agent
+tools:
+  - read
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pairs = orchestrator._discover_file_pairs()
+
+        assert len(pairs) == 1
+        assert pairs[0].base_name == "orphan-agent"
+        assert pairs[0].source_path is None
+        assert pairs[0].target_path == target_file
+
+    def test_discover_matching_pairs(self, orchestrator):
+        """Test discovery matches files by base name."""
+        # Create matching source and target files
+        source_file = orchestrator.source_dir / "planner.md"
+        source_file.write_text("""---
+name: planner
+description: Planner agent
+---
+Instructions.
+""")
+
+        target_file = orchestrator.target_dir / "planner.agent.md"
+        target_file.write_text("""---
+name: planner
+description: Planner agent
+tools:
+  - read
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pairs = orchestrator._discover_file_pairs()
+
+        assert len(pairs) == 1
+        assert pairs[0].base_name == "planner"
+        assert pairs[0].source_path == source_file
+        assert pairs[0].target_path == target_file
+        assert pairs[0].source_mtime is not None
+        assert pairs[0].target_mtime is not None
+
+    def test_discover_multiple_files(self, orchestrator):
+        """Test discovery with multiple files in various states."""
+        # Source only
+        (orchestrator.source_dir / "agent-a.md").write_text("---\nname: a\ndescription: A\n---\n")
+        # Target only
+        (orchestrator.target_dir / "agent-b.agent.md").write_text("---\nname: b\ndescription: B\ntools: []\nmodel: Claude Sonnet 4\ntarget: vscode\n---\n")
+        # Both
+        (orchestrator.source_dir / "agent-c.md").write_text("---\nname: c\ndescription: C\n---\n")
+        (orchestrator.target_dir / "agent-c.agent.md").write_text("---\nname: c\ndescription: C\ntools: []\nmodel: Claude Sonnet 4\ntarget: vscode\n---\n")
+
+        pairs = orchestrator._discover_file_pairs()
+
+        assert len(pairs) == 3
+        # Should be sorted by name
+        base_names = [p.base_name for p in pairs]
+        assert base_names == sorted(base_names)
+
+    def test_discover_ignores_non_matching_extensions(self, orchestrator):
+        """Test that non-agent files are ignored."""
+        # Create non-agent files
+        (orchestrator.source_dir / "readme.txt").write_text("Not an agent")
+        (orchestrator.source_dir / "config.json").write_text("{}")
+        (orchestrator.target_dir / "notes.md").write_text("Some notes")  # Not .agent.md
+
+        # Create one valid agent
+        (orchestrator.source_dir / "real-agent.md").write_text("---\nname: real\ndescription: Real\n---\n")
+
+        pairs = orchestrator._discover_file_pairs()
+
+        assert len(pairs) == 1
+        assert pairs[0].base_name == "real-agent"
+
+
+class TestDetermineAction:
+    """Tests for _determine_action method."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    @pytest.fixture
+    def orchestrator(self, registry, state_manager, tmp_path):
+        """Create orchestrator instance."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        return UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='both'
+        )
+
+    def test_determine_action_new_source_file(self, orchestrator):
+        """Test action for new file in source only."""
+        pair = FilePair(
+            base_name="new-agent",
+            source_path=Path("/source/new-agent.md"),
+            target_path=None,
+            source_mtime=1000.0,
+            target_mtime=None
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'source_to_target'
+
+    def test_determine_action_new_target_file(self, orchestrator):
+        """Test action for new file in target only."""
+        pair = FilePair(
+            base_name="new-agent",
+            source_path=None,
+            target_path=Path("/target/new-agent.agent.md"),
+            source_mtime=None,
+            target_mtime=1000.0
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'target_to_source'
+
+    def test_determine_action_source_to_target_direction(self, registry, state_manager, tmp_path):
+        """Test that direction='source-to-target' blocks reverse sync."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='source-to-target'  # One-way
+        )
+
+        # New file in target should be skipped
+        pair = FilePair(
+            base_name="target-only",
+            source_path=None,
+            target_path=Path("/target/target-only.agent.md"),
+            source_mtime=None,
+            target_mtime=1000.0
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'skip'
+
+    def test_determine_action_first_sync_uses_newer(self, orchestrator):
+        """Test that first sync uses newer file when both exist."""
+        # Source is newer
+        pair = FilePair(
+            base_name="agent",
+            source_path=Path("/source/agent.md"),
+            target_path=Path("/target/agent.agent.md"),
+            source_mtime=2000.0,  # Newer
+            target_mtime=1000.0
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'source_to_target'
+
+        # Target is newer
+        pair2 = FilePair(
+            base_name="agent2",
+            source_path=Path("/source/agent2.md"),
+            target_path=Path("/target/agent2.agent.md"),
+            source_mtime=1000.0,
+            target_mtime=2000.0  # Newer
+        )
+
+        action2 = orchestrator._determine_action(pair2)
+        assert action2 == 'target_to_source'
+
+    def test_determine_action_skip_unchanged(self, orchestrator):
+        """Test skip when files haven't changed since last sync."""
+        # Set up state as if we synced before
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "unchanged-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        pair = FilePair(
+            base_name="unchanged-agent",
+            source_path=Path("/source/unchanged-agent.md"),
+            target_path=Path("/target/unchanged-agent.agent.md"),
+            source_mtime=1000.0,  # Same as recorded
+            target_mtime=1000.0   # Same as recorded
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'skip'
+
+    def test_determine_action_source_changed(self, orchestrator):
+        """Test source_to_target when only source changed."""
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "test-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        pair = FilePair(
+            base_name="test-agent",
+            source_path=Path("/source/test-agent.md"),
+            target_path=Path("/target/test-agent.agent.md"),
+            source_mtime=2000.0,  # Changed
+            target_mtime=1000.0   # Unchanged
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'source_to_target'
+
+    def test_determine_action_target_changed(self, orchestrator):
+        """Test target_to_source when only target changed."""
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "test-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        pair = FilePair(
+            base_name="test-agent",
+            source_path=Path("/source/test-agent.md"),
+            target_path=Path("/target/test-agent.agent.md"),
+            source_mtime=1000.0,   # Unchanged
+            target_mtime=2000.0    # Changed
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'target_to_source'
 
     def test_determine_action_conflict(self, orchestrator):
-        """Test action determination for conflicting files."""
-        # TODO: Implement
-        pass
+        """Test conflict when both files changed."""
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "conflict-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
 
-    def test_sync_execution(self, orchestrator):
-        """Test executing sync operation."""
-        # TODO: Implement
-        pass
+        pair = FilePair(
+            base_name="conflict-agent",
+            source_path=Path("/source/conflict-agent.md"),
+            target_path=Path("/target/conflict-agent.agent.md"),
+            source_mtime=2000.0,  # Changed
+            target_mtime=3000.0   # Also changed
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'conflict'
+
+
+class TestDeletionHandling:
+    """Tests for deletion handling scenarios."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    @pytest.fixture
+    def orchestrator(self, registry, state_manager, tmp_path):
+        """Create orchestrator instance."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        return UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='both'
+        )
+
+    def test_source_deleted_target_exists(self, orchestrator):
+        """Test action when source was deleted but target still exists."""
+        # Set up state as if both files existed before
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "deleted-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        # Create only target file (source was "deleted")
+        target_file = orchestrator.target_dir / "deleted-agent.agent.md"
+        target_file.write_text("""---
+name: deleted-agent
+description: Agent whose source was deleted
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="deleted-agent",
+            source_path=None,  # Deleted
+            target_path=target_file,
+            source_mtime=None,
+            target_mtime=target_file.stat().st_mtime
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'delete_target'
+
+    def test_target_deleted_source_exists(self, orchestrator):
+        """Test action when target was deleted but source still exists."""
+        # Set up state as if both files existed before
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "deleted-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        # Create only source file (target was "deleted")
+        source_file = orchestrator.source_dir / "deleted-agent.md"
+        source_file.write_text("""---
+name: deleted-agent
+description: Agent whose target was deleted
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="deleted-agent",
+            source_path=source_file,
+            target_path=None,  # Deleted
+            source_mtime=source_file.stat().st_mtime,
+            target_mtime=None
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'delete_source'
+
+    def test_source_deleted_recreated_newer(self, orchestrator):
+        """Test action when source was deleted then recreated (newer than last sync)."""
+        # Set up old state
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "recreated-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        # Create both files - source is newer (recreated)
+        source_file = orchestrator.source_dir / "recreated-agent.md"
+        source_file.write_text("""---
+name: recreated-agent
+description: Recreated source
+---
+Instructions.
+""")
+
+        target_file = orchestrator.target_dir / "recreated-agent.agent.md"
+        target_file.write_text("""---
+name: recreated-agent
+description: Old target
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="recreated-agent",
+            source_path=source_file,
+            target_path=target_file,
+            source_mtime=source_file.stat().st_mtime,  # Newer than 1000.0
+            target_mtime=1000.0  # Same as state
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'source_to_target'
+
+    def test_target_deleted_recreated_newer(self, orchestrator):
+        """Test action when target was deleted then recreated (newer than last sync)."""
+        # Set up old state
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "recreated-agent",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        # Create both files - target is newer (recreated)
+        source_file = orchestrator.source_dir / "recreated-agent.md"
+        source_file.write_text("""---
+name: recreated-agent
+description: Old source
+---
+Instructions.
+""")
+
+        target_file = orchestrator.target_dir / "recreated-agent.agent.md"
+        target_file.write_text("""---
+name: recreated-agent
+description: Recreated target
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="recreated-agent",
+            source_path=source_file,
+            target_path=target_file,
+            source_mtime=1000.0,  # Same as state
+            target_mtime=target_file.stat().st_mtime  # Newer than 1000.0
+        )
+
+        action = orchestrator._determine_action(pair)
+        assert action == 'target_to_source'
+
+    def test_both_deleted(self, orchestrator):
+        """Test action when both source and target were deleted."""
+        # Set up state as if both files existed before
+        orchestrator.state_manager.update_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "both-deleted",
+            source_mtime=1000.0,
+            target_mtime=1000.0,
+            action='source_to_target'
+        )
+
+        # Neither file exists
+        pair = FilePair(
+            base_name="both-deleted",
+            source_path=None,
+            target_path=None,
+            source_mtime=None,
+            target_mtime=None
+        )
+
+        action = orchestrator._determine_action(pair)
+        # Should skip or clean up state
+        assert action in ('skip', 'remove_state')
+
+    def test_orphaned_target_no_state(self, orchestrator):
+        """Test action for target file with no source and no previous state."""
+        # No prior state - this is a new target-only file
+        target_file = orchestrator.target_dir / "orphan.agent.md"
+        target_file.write_text("""---
+name: orphan
+description: Orphan target
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="orphan",
+            source_path=None,
+            target_path=target_file,
+            source_mtime=None,
+            target_mtime=target_file.stat().st_mtime
+        )
+
+        action = orchestrator._determine_action(pair)
+        # New file should sync to source
+        assert action == 'target_to_source'
+
+    def test_orphaned_source_no_state(self, orchestrator):
+        """Test action for source file with no target and no previous state."""
+        # No prior state - this is a new source-only file
+        source_file = orchestrator.source_dir / "orphan.md"
+        source_file.write_text("""---
+name: orphan
+description: Orphan source
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="orphan",
+            source_path=source_file,
+            target_path=None,
+            source_mtime=source_file.stat().st_mtime,
+            target_mtime=None
+        )
+
+        action = orchestrator._determine_action(pair)
+        # New file should sync to target
+        assert action == 'source_to_target'
+
+    def test_deletion_respects_direction(self, registry, state_manager, tmp_path):
+        """Test that deletion respects direction constraints."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='target-to-source'  # Only allow target->source
+        )
+
+        # Set up state
+        state_manager.update_file_state(
+            source_dir, target_dir, "constrained",
+            source_mtime=1000.0, target_mtime=1000.0, action='source_to_target'
+        )
+
+        # Source was deleted, target exists
+        target_file = target_dir / "constrained.agent.md"
+        target_file.write_text("""---
+name: constrained
+description: Constrained agent
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="constrained",
+            source_path=None,
+            target_path=target_file,
+            source_mtime=None,
+            target_mtime=target_file.stat().st_mtime
+        )
+
+        action = orchestrator._determine_action(pair)
+        # Cannot delete target in target-to-source mode
+        assert action == 'skip'
+
+
+class TestResolveConflict:
+    """Tests for _resolve_conflict method."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    def test_resolve_conflict_force_uses_newer_source(self, registry, state_manager, tmp_path):
+        """Test force mode uses source when source is newer."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=True  # Enable force mode
+        )
+
+        pair = FilePair(
+            base_name="conflict-agent",
+            source_path=source_dir / "conflict-agent.md",
+            target_path=target_dir / "conflict-agent.agent.md",
+            source_mtime=2000.0,  # Newer
+            target_mtime=1000.0
+        )
+
+        action = orchestrator._resolve_conflict(pair)
+        assert action == 'source_to_target'
+
+    def test_resolve_conflict_force_uses_newer_target(self, registry, state_manager, tmp_path):
+        """Test force mode uses target when target is newer."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=True  # Enable force mode
+        )
+
+        pair = FilePair(
+            base_name="conflict-agent",
+            source_path=source_dir / "conflict-agent.md",
+            target_path=target_dir / "conflict-agent.agent.md",
+            source_mtime=1000.0,
+            target_mtime=2000.0  # Newer
+        )
+
+        action = orchestrator._resolve_conflict(pair)
+        assert action == 'target_to_source'
+
+    def test_resolve_conflict_interactive_choice_source(self, registry, state_manager, tmp_path):
+        """Test interactive mode returns source_to_target when user chooses 1."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=False  # Interactive mode
+        )
+
+        pair = FilePair(
+            base_name="conflict-agent",
+            source_path=source_dir / "conflict-agent.md",
+            target_path=target_dir / "conflict-agent.agent.md",
+            source_mtime=1000.0,
+            target_mtime=2000.0
+        )
+
+        with patch('builtins.input', return_value='1'):
+            action = orchestrator._resolve_conflict(pair)
+
+        assert action == 'source_to_target'
+
+    def test_resolve_conflict_interactive_choice_target(self, registry, state_manager, tmp_path):
+        """Test interactive mode returns target_to_source when user chooses 2."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=False
+        )
+
+        pair = FilePair(
+            base_name="conflict-agent",
+            source_path=source_dir / "conflict-agent.md",
+            target_path=target_dir / "conflict-agent.agent.md",
+            source_mtime=1000.0,
+            target_mtime=2000.0
+        )
+
+        with patch('builtins.input', return_value='2'):
+            action = orchestrator._resolve_conflict(pair)
+
+        assert action == 'target_to_source'
+
+    def test_resolve_conflict_interactive_skip(self, registry, state_manager, tmp_path):
+        """Test interactive mode returns None when user chooses to skip."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=False
+        )
+
+        pair = FilePair(
+            base_name="conflict-agent",
+            source_path=source_dir / "conflict-agent.md",
+            target_path=target_dir / "conflict-agent.agent.md",
+            source_mtime=1000.0,
+            target_mtime=2000.0
+        )
+
+        with patch('builtins.input', return_value='3'):
+            action = orchestrator._resolve_conflict(pair)
+
+        assert action is None
+
+
+class TestExecuteSyncAction:
+    """Tests for _execute_sync_action method."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    @pytest.fixture
+    def orchestrator(self, registry, state_manager, tmp_path):
+        """Create orchestrator instance."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        return UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+
+    def test_execute_source_to_target(self, orchestrator):
+        """Test syncing from source to target creates target file."""
+        # Create source file
+        source_file = orchestrator.source_dir / "test-agent.md"
+        source_file.write_text("""---
+name: test-agent
+description: Test agent for sync
+tools: Read, Grep
+model: sonnet
+---
+Test instructions.
+""")
+
+        pair = FilePair(
+            base_name="test-agent",
+            source_path=source_file,
+            target_path=None,
+            source_mtime=source_file.stat().st_mtime,
+            target_mtime=None
+        )
+
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        # Verify target file was created
+        target_file = orchestrator.target_dir / "test-agent.agent.md"
+        assert target_file.exists()
+
+        content = target_file.read_text()
+        assert "name: test-agent" in content
+        assert "target: vscode" in content  # Copilot format adds this
+
+        # Verify stats updated
+        assert orchestrator.stats['source_to_target'] == 1
+
+    def test_execute_target_to_source(self, orchestrator):
+        """Test syncing from target to source creates source file."""
+        # Create target file
+        target_file = orchestrator.target_dir / "test-agent.agent.md"
+        target_file.write_text("""---
+name: test-agent
+description: Test agent for sync
+tools:
+  - read
+  - grep
+model: Claude Sonnet 4
+target: vscode
+---
+Test instructions.
+""")
+
+        pair = FilePair(
+            base_name="test-agent",
+            source_path=None,
+            target_path=target_file,
+            source_mtime=None,
+            target_mtime=target_file.stat().st_mtime
+        )
+
+        orchestrator._execute_sync_action(pair, 'target_to_source')
+
+        # Verify source file was created
+        source_file = orchestrator.source_dir / "test-agent.md"
+        assert source_file.exists()
+
+        content = source_file.read_text()
+        assert "name: test-agent" in content
+
+        # Verify stats updated
+        assert orchestrator.stats['target_to_source'] == 1
+
+    def test_execute_dry_run_no_write(self, registry, state_manager, tmp_path):
+        """Test that dry_run mode doesn't write files."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=True  # Dry run enabled
+        )
+
+        # Create source file
+        source_file = source_dir / "dry-run-agent.md"
+        source_file.write_text("""---
+name: dry-run-agent
+description: Test agent
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="dry-run-agent",
+            source_path=source_file,
+            target_path=None,
+            source_mtime=source_file.stat().st_mtime,
+            target_mtime=None
+        )
+
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        # Verify target file was NOT created
+        target_file = target_dir / "dry-run-agent.agent.md"
+        assert not target_file.exists()
+
+        # Stats should still be updated
+        assert orchestrator.stats['source_to_target'] == 1
+
+    def test_execute_updates_existing_file(self, orchestrator):
+        """Test updating an existing target file."""
+        # Create source and target files
+        source_file = orchestrator.source_dir / "update-agent.md"
+        source_file.write_text("""---
+name: update-agent
+description: Updated description
+tools: Read, Grep, Glob
+model: opus
+---
+New instructions.
+""")
+
+        target_file = orchestrator.target_dir / "update-agent.agent.md"
+        target_file.write_text("""---
+name: update-agent
+description: Old description
+tools:
+  - read
+model: Claude Sonnet 4
+target: vscode
+---
+Old instructions.
+""")
+
+        pair = FilePair(
+            base_name="update-agent",
+            source_path=source_file,
+            target_path=target_file,
+            source_mtime=source_file.stat().st_mtime,
+            target_mtime=target_file.stat().st_mtime
+        )
+
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        # Verify target file was updated
+        content = target_file.read_text()
+        assert "Updated description" in content
+        assert "New instructions" in content
+
+    def test_execute_handles_error(self, orchestrator):
+        """Test error handling during sync execution."""
+        # Create a pair with a non-existent source file
+        pair = FilePair(
+            base_name="missing-agent",
+            source_path=Path("/nonexistent/missing-agent.md"),
+            target_path=None,
+            source_mtime=1000.0,
+            target_mtime=None
+        )
+
+        # Should not raise, but should increment error count
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        assert orchestrator.stats['errors'] == 1
+
+    def test_execute_updates_state(self, orchestrator):
+        """Test that state manager is updated after sync."""
+        # Create source file
+        source_file = orchestrator.source_dir / "state-test.md"
+        source_file.write_text("""---
+name: state-test
+description: Test state update
+---
+Instructions.
+""")
+
+        pair = FilePair(
+            base_name="state-test",
+            source_path=source_file,
+            target_path=None,
+            source_mtime=source_file.stat().st_mtime,
+            target_mtime=None
+        )
+
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        # Verify state was updated
+        file_state = orchestrator.state_manager.get_file_state(
+            orchestrator.source_dir,
+            orchestrator.target_dir,
+            "state-test"
+        )
+
+        assert file_state is not None
+        assert file_state['last_action'] == 'source_to_target'
+
+
+class TestSyncFullWorkflow:
+    """Tests for the complete sync() workflow."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    def test_sync_empty_directories(self, registry, state_manager, tmp_path, capsys):
+        """Test sync with empty directories."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            verbose=True
+        )
+
+        orchestrator.sync()
+
+        captured = capsys.readouterr()
+        assert "No files found" in captured.out or orchestrator.stats['skipped'] == 0
+
+    def test_sync_new_files_created(self, registry, state_manager, tmp_path):
+        """Test sync creates new target files from source."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create source file
+        (source_dir / "new-agent.md").write_text("""---
+name: new-agent
+description: New agent
+tools: Read
+model: sonnet
+---
+Instructions.
+""")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+
+        orchestrator.sync()
+
+        # Verify target was created
+        assert (target_dir / "new-agent.agent.md").exists()
+        assert orchestrator.stats['source_to_target'] == 1
+
+    def test_sync_bidirectional(self, registry, state_manager, tmp_path):
+        """Test bidirectional sync creates files in both directions."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create source-only file
+        (source_dir / "source-only.md").write_text("""---
+name: source-only
+description: From source
+---
+Source instructions.
+""")
+
+        # Create target-only file
+        (target_dir / "target-only.agent.md").write_text("""---
+name: target-only
+description: From target
+tools:
+  - read
+model: Claude Sonnet 4
+target: vscode
+---
+Target instructions.
+""")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='both',
+            dry_run=False
+        )
+
+        orchestrator.sync()
+
+        # Verify both directions synced
+        assert (target_dir / "source-only.agent.md").exists()
+        assert (source_dir / "target-only.md").exists()
+        assert orchestrator.stats['source_to_target'] == 1
+        assert orchestrator.stats['target_to_source'] == 1
+
+    def test_sync_respects_direction(self, registry, state_manager, tmp_path):
+        """Test sync respects direction setting."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create source-only file
+        (source_dir / "source-only.md").write_text("""---
+name: source-only
+description: From source
+---
+""")
+
+        # Create target-only file
+        (target_dir / "target-only.agent.md").write_text("""---
+name: target-only
+description: From target
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+""")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='source-to-target',  # One way only
+            dry_run=False
+        )
+
+        orchestrator.sync()
+
+        # Source-only should be synced to target
+        assert (target_dir / "source-only.agent.md").exists()
+        # Target-only should NOT be synced to source
+        assert not (source_dir / "target-only.md").exists()
+        assert orchestrator.stats['source_to_target'] == 1
+        assert orchestrator.stats['target_to_source'] == 0
+
+    def test_sync_dry_run_no_state_save(self, registry, state_manager, tmp_path):
+        """Test dry run doesn't save state."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        (source_dir / "dry-test.md").write_text("""---
+name: dry-test
+description: Dry run test
+---
+""")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=True
+        )
+
+        orchestrator.sync()
+
+        # State file should not exist (wasn't saved)
+        # Note: Depending on implementation, state_manager might create file on load
+        # So we check that no file state was recorded
+        file_state = state_manager.get_file_state(source_dir, target_dir, "dry-test")
+        # In dry run, file state should not be persisted
+        assert file_state is None or 'last_action' not in file_state
+
+    def test_sync_with_conflict_force_mode(self, registry, state_manager, tmp_path):
+        """Test sync handles conflicts in force mode."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Set up prior sync state
+        state_manager.update_file_state(
+            source_dir, target_dir, "conflict-agent",
+            source_mtime=1000.0, target_mtime=1000.0, action='source_to_target'
+        )
+
+        # Create both files with newer mtimes
+        source_file = source_dir / "conflict-agent.md"
+        source_file.write_text("""---
+name: conflict-agent
+description: Source version
+model: opus
+---
+Source wins.
+""")
+        # Wait a bit to ensure different mtime
+        time.sleep(0.01)
+        target_file = target_dir / "conflict-agent.agent.md"
+        target_file.write_text("""---
+name: conflict-agent
+description: Target version
+tools: []
+model: Claude Sonnet 4
+target: vscode
+---
+Target wins.
+""")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=True,  # Force mode resolves conflicts automatically
+            dry_run=False
+        )
+
+        orchestrator.sync()
+
+        # Target was newer, so should win
+        source_content = source_file.read_text()
+        assert "Target version" in source_content or "Target wins" in source_content
+        assert orchestrator.stats['conflicts'] == 1
+
+    def test_sync_prints_summary(self, registry, state_manager, tmp_path, capsys):
+        """Test sync prints summary at the end."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        (source_dir / "agent.md").write_text("""---
+name: agent
+description: Test
+---
+""")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+
+        orchestrator.sync()
+
+        captured = capsys.readouterr()
+        assert "Summary" in captured.out or "=" * 10 in captured.out
+
+
+class TestExtractBaseName:
+    """Tests for _extract_base_name helper method."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    @pytest.fixture
+    def orchestrator(self, registry, state_manager, tmp_path):
+        """Create orchestrator instance."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        return UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager
+        )
+
+    def test_extract_simple_extension(self, orchestrator):
+        """Test extracting base name from simple .md extension."""
+        path = Path("/some/path/my-agent.md")
+        base_name = orchestrator._extract_base_name(path, ".md")
+        assert base_name == "my-agent"
+
+    def test_extract_compound_extension(self, orchestrator):
+        """Test extracting base name from compound .agent.md extension."""
+        path = Path("/some/path/my-agent.agent.md")
+        base_name = orchestrator._extract_base_name(path, ".agent.md")
+        assert base_name == "my-agent"
+
+    def test_extract_handles_dots_in_name(self, orchestrator):
+        """Test extracting base name when name contains dots."""
+        path = Path("/some/path/my.special.agent.md")
+        base_name = orchestrator._extract_base_name(path, ".md")
+        assert base_name == "my.special.agent"
+
+    def test_extract_no_match_falls_back_to_stem(self, orchestrator):
+        """Test fallback to stem when extension doesn't match."""
+        path = Path("/some/path/agent.txt")
+        base_name = orchestrator._extract_base_name(path, ".md")
+        assert base_name == "agent"
