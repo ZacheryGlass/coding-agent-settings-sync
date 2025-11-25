@@ -14,6 +14,7 @@ Test structure:
 - test_registry.py - Tests for format registry
 - test_orchestrator.py - Tests for sync orchestrator
 - test_state_manager.py - Tests for state manager
+- test_cli.py - Tests for CLI argument parsing and invocation
 - test_integration.py - End-to-end integration tests
 - fixtures/ - Sample agent files for testing
 
