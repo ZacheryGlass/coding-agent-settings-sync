@@ -18,7 +18,6 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 
-from .adapter_interface import FormatAdapter
 from .canonical_models import ConfigType
 from .registry import FormatRegistry
 from .state_manager import SyncStateManager
