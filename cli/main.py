@@ -3,7 +3,7 @@ Main CLI entry point for universal agent sync tool.
 
 This module provides the command-line interface for syncing configurations
 between different AI coding tools. It supports:
-- Multi-format sync (Claude, Copilot, Cursor, etc.)
+- Multi-format sync (Claude, Copilot, etc.)
 - Multiple config types (agents, permissions, prompts)
 - Bidirectional and unidirectional sync
 - Dry-run mode
@@ -27,8 +27,8 @@ from core.orchestrator import UniversalSyncOrchestrator
 from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
 
-# Import all adapters
-from adapters import ClaudeAdapter, CopilotAdapter, CursorAdapter, WindsurfAdapter, ContinueAdapter
+# Import adapters
+from adapters import ClaudeAdapter, CopilotAdapter
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -78,7 +78,7 @@ Examples:
         '--source-format',
         type=str,
         required=True,
-        choices=['claude', 'copilot', 'cursor', 'windsurf', 'continue'],
+        choices=['claude', 'copilot'],
         help='Source format name'
     )
 
@@ -86,7 +86,7 @@ Examples:
         '--target-format',
         type=str,
         required=True,
-        choices=['claude', 'copilot', 'cursor', 'windsurf', 'continue'],
+        choices=['claude', 'copilot'],
         help='Target format name'
     )
 
@@ -159,10 +159,6 @@ def setup_registry() -> FormatRegistry:
     # Register adapters
     registry.register(ClaudeAdapter())
     registry.register(CopilotAdapter())
-    # Note: Cursor, Windsurf, Continue are stubs - will raise NotImplementedError
-    registry.register(CursorAdapter())
-    registry.register(WindsurfAdapter())
-    registry.register(ContinueAdapter())
 
     return registry
 

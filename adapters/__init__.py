@@ -11,26 +11,20 @@ AI coding tool. Each adapter knows how to:
 Available adapters:
 - ClaudeAdapter: Claude Code (.md files)
 - CopilotAdapter: GitHub Copilot (.agent.md files)
-- CursorAdapter: Cursor AI (.cursor/modes.json)
-- WindsurfAdapter: Windsurf IDE (memories/rules)
-- ContinueAdapter: Continue.dev (config.yaml)
+- ExampleAdapter: Template for new implementations
 
 Adding a new adapter:
-1. Create new file (e.g., myagent.py)
+1. Copy example.py to yourformat.py
 2. Implement FormatAdapter interface
 3. Register with FormatRegistry in your application
 """
 
 from .claude import ClaudeAdapter
 from .copilot import CopilotAdapter
-from .cursor import CursorAdapter
-from .windsurf import WindsurfAdapter
-from .continue_dev import ContinueAdapter
+from .example import ExampleAdapter
 
 __all__ = [
     'ClaudeAdapter',
     'CopilotAdapter',
-    'CursorAdapter',
-    'WindsurfAdapter',
-    'ContinueAdapter',
+    'ExampleAdapter',
 ]
