@@ -1,5 +1,4 @@
 CLAUDE.md
-.vscode/settings.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -62,7 +61,6 @@ env.bak/
 venv.bak/
 
 # IDEs
-.vscode/
 .idea/
 *.swp
 *.swo
