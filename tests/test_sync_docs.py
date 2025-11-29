@@ -301,6 +301,29 @@ class TestSyncDoc:
 
         assert result is False
 
+    def test_markdown_format_skips_html_conversion(self, tmp_path, requests_mock):
+        """Markdown format uses content as-is without HTML conversion."""
+        markdown_content = "# Test Header\n\nThis is **markdown** content."
+        requests_mock.get("https://docs.example.com/test.md", text=markdown_content)
+
+        config = {
+            "url": "https://docs.example.com/test.md",
+            "output": "docs/test.md",
+            "title": "Test Markdown Doc",
+            "format": "markdown",
+        }
+
+        result = sync_doc("test", config, tmp_path)
+
+        assert result is True
+        output_file = tmp_path / "docs" / "test.md"
+        content = output_file.read_text()
+
+        # Content should be preserved as-is (not HTML-converted)
+        assert "# Test Header" in content
+        assert "**markdown**" in content
+        assert "title: Test Markdown Doc" in content
+
 
 class TestDocSources:
     """Tests for DOC_SOURCES configuration."""
