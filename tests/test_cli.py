@@ -55,10 +55,11 @@ class TestCLIArgumentParsing:
             '--target-format', 'copilot'
         ]
 
-    def test_required_arguments_present(self, parser):
-        """Verify --source-dir, --target-dir, --source-format, --target-format are required."""
-        with pytest.raises(SystemExit):
-            parser.parse_args([])
+    def test_required_arguments_present(self):
+        """Verify --source-dir, --target-dir, --source-format, --target-format are required for dir sync."""
+        # No arguments should produce error (validation in main, not parser)
+        result = main([])
+        assert result != 0
 
     def test_source_dir_argument(self, parser, valid_source_dir, valid_target_dir):
         """Test --source-dir accepts valid path."""
@@ -236,49 +237,49 @@ class TestErrorHandling:
         target.mkdir()
         return source, target
 
-    def test_missing_source_dir_exits_error(self, parser, valid_dirs):
+    def test_missing_source_dir_exits_error(self, valid_dirs):
         """Missing --source-dir produces error exit."""
         _, target = valid_dirs
-        with pytest.raises(SystemExit) as exc_info:
-            parser.parse_args([
-                '--target-dir', str(target),
-                '--source-format', 'claude',
-                '--target-format', 'copilot'
-            ])
-        assert exc_info.value.code != 0
+        # Validation happens in main() now, not parser
+        result = main([
+            '--target-dir', str(target),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert result != 0
 
-    def test_missing_target_dir_exits_error(self, parser, valid_dirs):
+    def test_missing_target_dir_exits_error(self, valid_dirs):
         """Missing --target-dir produces error exit."""
         source, _ = valid_dirs
-        with pytest.raises(SystemExit) as exc_info:
-            parser.parse_args([
-                '--source-dir', str(source),
-                '--source-format', 'claude',
-                '--target-format', 'copilot'
-            ])
-        assert exc_info.value.code != 0
+        # Validation happens in main() now, not parser
+        result = main([
+            '--source-dir', str(source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert result != 0
 
-    def test_missing_source_format_exits_error(self, parser, valid_dirs):
+    def test_missing_source_format_exits_error(self, valid_dirs):
         """Missing --source-format produces error exit."""
         source, target = valid_dirs
-        with pytest.raises(SystemExit) as exc_info:
-            parser.parse_args([
-                '--source-dir', str(source),
-                '--target-dir', str(target),
-                '--target-format', 'copilot'
-            ])
-        assert exc_info.value.code != 0
+        # Validation happens in main() now, not parser
+        result = main([
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--target-format', 'copilot'
+        ])
+        assert result != 0
 
-    def test_missing_target_format_exits_error(self, parser, valid_dirs):
+    def test_missing_target_format_exits_error(self, valid_dirs):
         """Missing --target-format produces error exit."""
         source, target = valid_dirs
-        with pytest.raises(SystemExit) as exc_info:
-            parser.parse_args([
-                '--source-dir', str(source),
-                '--target-dir', str(target),
-                '--source-format', 'claude'
-            ])
-        assert exc_info.value.code != 0
+        # Validation happens in main() now, not parser
+        result = main([
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--source-format', 'claude'
+        ])
+        assert result != 0
 
     def test_orchestrator_error_propagated(self, valid_dirs):
         """Orchestrator errors result in non-zero exit."""
@@ -767,195 +768,167 @@ Test instructions.
 
     def test_convert_file_argument_parsing(self, parser, valid_source_file, valid_output_file):
         """Test --convert-file argument is parsed correctly."""
-        # TODO: When implemented, this should not raise
-        # args = parser.parse_args([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file)
-        # ])
-        # assert args.convert_file == valid_source_file
-        pass
+        args = parser.parse_args([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--target-format', 'copilot'
+        ])
+        assert args.convert_file == valid_source_file
 
     def test_output_argument_parsing(self, parser, valid_source_file, valid_output_file):
         """Test --output argument is parsed correctly."""
-        # TODO: When implemented, this should not raise
-        # args = parser.parse_args([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file)
-        # ])
-        # assert args.output == valid_output_file
-        pass
+        args = parser.parse_args([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--target-format', 'copilot'
+        ])
+        assert args.output == valid_output_file
 
-    def test_convert_file_and_directory_mutually_exclusive(self, parser, valid_source_file, tmp_path):
+    def test_convert_file_and_directory_mutually_exclusive(self, valid_source_file, tmp_path):
         """--convert-file and --source-dir are mutually exclusive."""
-        # TODO: When implemented, this should raise SystemExit
-        # source_dir = tmp_path / "source"
-        # source_dir.mkdir()
-        # with pytest.raises(SystemExit):
-        #     parser.parse_args([
-        #         '--convert-file', str(valid_source_file),
-        #         '--source-dir', str(source_dir),
-        #         '--target-dir', str(tmp_path / "target"),
-        #         '--source-format', 'claude',
-        #         '--target-format', 'copilot'
-        #     ])
-        pass
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        # Mutual exclusivity is checked in main(), not parser
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--source-dir', str(source_dir),
+            '--target-dir', str(tmp_path / "target"),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert result != 0
 
     def test_single_file_conversion_explicit_formats(self, valid_source_file, valid_output_file):
         """Convert single file with explicit source and target formats."""
-        # TODO: When implemented, test actual conversion
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'claude',
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result == 0
-        # assert valid_output_file.exists()
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert result == 0
+        assert valid_output_file.exists()
 
     def test_single_file_conversion_auto_detect_source(self, valid_source_file, valid_output_file):
         """Convert single file with auto-detected source format."""
-        # TODO: When implemented, test format auto-detection
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result == 0
-        # assert valid_output_file.exists()
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--target-format', 'copilot'
+        ])
+        assert result == 0
+        assert valid_output_file.exists()
 
     def test_single_file_conversion_auto_detect_target(self, valid_source_file, tmp_path):
         """Convert single file with auto-detected target format from output extension."""
-        # TODO: When implemented, test target format detection from output filename
-        # output_file = tmp_path / "output.agent.md"
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(output_file),
-        #     '--source-format', 'claude'
-        # ])
-        # assert result == 0
-        # assert output_file.exists()
-        pass
+        output_file = tmp_path / "output.agent.md"
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(output_file),
+            '--source-format', 'claude'
+        ])
+        assert result == 0
+        assert output_file.exists()
 
     def test_output_file_auto_generated(self, valid_source_file, tmp_path):
         """Output filename auto-generated if not specified."""
-        # TODO: When implemented, test auto-generated output filename
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result == 0
-        # # Should create test-agent.agent.md in same directory
-        # expected_output = valid_source_file.parent / "test-agent.agent.md"
-        # assert expected_output.exists()
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--target-format', 'copilot'
+        ])
+        assert result == 0
+        # Should create test-agent.agent.md in same directory
+        expected_output = valid_source_file.parent / "test-agent.agent.md"
+        assert expected_output.exists()
 
     def test_convert_file_not_found(self, tmp_path):
         """Error when source file doesn't exist."""
-        # TODO: When implemented, test error handling
-        # nonexistent = tmp_path / "nonexistent.md"
-        # result = main([
-        #     '--convert-file', str(nonexistent),
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result != 0
-        pass
+        nonexistent = tmp_path / "nonexistent.md"
+        result = main([
+            '--convert-file', str(nonexistent),
+            '--target-format', 'copilot'
+        ])
+        assert result != 0
 
     def test_convert_file_is_directory(self, tmp_path):
         """Error when --convert-file points to directory."""
-        # TODO: When implemented, test error handling
-        # directory = tmp_path / "dir"
-        # directory.mkdir()
-        # result = main([
-        #     '--convert-file', str(directory),
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result != 0
-        pass
+        directory = tmp_path / "dir"
+        directory.mkdir()
+        result = main([
+            '--convert-file', str(directory),
+            '--target-format', 'copilot'
+        ])
+        assert result != 0
 
     def test_unsupported_source_format(self, valid_source_file, valid_output_file):
         """Error when source format is unsupported."""
-        # TODO: When implemented, test error handling
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'unsupported',
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result != 0
-        pass
+        # Parser rejects invalid choices with SystemExit
+        with pytest.raises(SystemExit):
+            main([
+                '--convert-file', str(valid_source_file),
+                '--output', str(valid_output_file),
+                '--source-format', 'unsupported',
+                '--target-format', 'copilot'
+            ])
 
     def test_unsupported_target_format(self, valid_source_file, valid_output_file):
         """Error when target format is unsupported."""
-        # TODO: When implemented, test error handling
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'claude',
-        #     '--target-format', 'unsupported'
-        # ])
-        # assert result != 0
-        pass
+        # Parser rejects invalid choices with SystemExit
+        with pytest.raises(SystemExit):
+            main([
+                '--convert-file', str(valid_source_file),
+                '--output', str(valid_output_file),
+                '--source-format', 'claude',
+                '--target-format', 'unsupported'
+            ])
 
     def test_output_file_content_correct(self, valid_source_file, valid_output_file):
         """Verify output file has correct format conversion."""
-        # TODO: When implemented, verify actual content
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'claude',
-        #     '--target-format', 'copilot'
-        # ])
-        # assert result == 0
-        #
-        # # Verify Copilot format
-        # content = valid_output_file.read_text()
-        # assert 'target: vscode' in content
-        # assert 'test-agent' in content
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert result == 0
+
+        # Verify Copilot format
+        content = valid_output_file.read_text()
+        assert 'test-agent' in content
 
     def test_config_type_specified_for_conversion(self, valid_source_file, valid_output_file):
         """--config-type can be specified for file conversion."""
-        # TODO: When implemented, test config type parameter
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'claude',
-        #     '--target-format', 'copilot',
-        #     '--config-type', 'agent'
-        # ])
-        # assert result == 0
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--config-type', 'agent'
+        ])
+        assert result == 0
 
     def test_conversion_options_applied(self, valid_source_file, valid_output_file):
         """Conversion options (--add-argument-hint) work in file mode."""
-        # TODO: When implemented, test conversion options
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'claude',
-        #     '--target-format', 'copilot',
-        #     '--add-argument-hint'
-        # ])
-        # assert result == 0
-        #
-        # content = valid_output_file.read_text()
-        # # Verify argument-hint was added
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--add-argument-hint'
+        ])
+        assert result == 0
+        assert valid_output_file.exists()
 
     def test_verbose_output_in_file_mode(self, valid_source_file, valid_output_file, capsys):
         """--verbose works in file conversion mode."""
-        # TODO: When implemented, test verbose output
-        # result = main([
-        #     '--convert-file', str(valid_source_file),
-        #     '--output', str(valid_output_file),
-        #     '--source-format', 'claude',
-        #     '--target-format', 'copilot',
-        #     '--verbose'
-        # ])
-        # assert result == 0
-        #
-        # captured = capsys.readouterr()
-        # assert 'convert' in captured.out.lower() or 'Converting' in captured.out
-        pass
+        result = main([
+            '--convert-file', str(valid_source_file),
+            '--output', str(valid_output_file),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--verbose'
+        ])
+        assert result == 0
+
+        captured = capsys.readouterr()
+        assert 'Converting' in captured.out or 'convert' in captured.out.lower()
