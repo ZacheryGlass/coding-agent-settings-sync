@@ -28,6 +28,13 @@ from core.canonical_models import ConfigType
 # Import adapters
 from adapters import ClaudeAdapter, CopilotAdapter
 
+# Mapping from CLI string to ConfigType enum (single source of truth)
+CONFIG_TYPE_MAP = {
+    'agent': ConfigType.AGENT,
+    'permission': ConfigType.PERMISSION,
+    'prompt': ConfigType.PROMPT
+}
+
 
 def create_parser() -> argparse.ArgumentParser:
     """
@@ -231,12 +238,7 @@ def convert_single_file(args) -> int:
         output_file = source_file.parent / f"{base_name}{target_adapter.file_extension}"
 
     # 5. Get config type
-    config_type_map = {
-        'agent': ConfigType.AGENT,
-        'permission': ConfigType.PERMISSION,
-        'prompt': ConfigType.PROMPT
-    }
-    config_type = config_type_map[args.config_type]
+    config_type = CONFIG_TYPE_MAP[args.config_type]
 
     # 6. Build conversion options
     conversion_options = {}
@@ -340,12 +342,7 @@ def main(argv: Optional[list] = None):
             return 1
 
         # 2. Convert config_type string to ConfigType enum
-        config_type_map = {
-            'agent': ConfigType.AGENT,
-            'permission': ConfigType.PERMISSION,
-            'prompt': ConfigType.PROMPT
-        }
-        config_type = config_type_map[args.config_type]
+        config_type = CONFIG_TYPE_MAP[args.config_type]
 
         # 3. Setup registry
         registry = setup_registry()

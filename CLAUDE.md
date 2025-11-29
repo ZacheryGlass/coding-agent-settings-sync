@@ -45,6 +45,16 @@ python -m cli.main \
   --config-type agent \
   --dry-run
 
+# Single-file conversion
+python -m cli.main \
+  --convert-file ~/.claude/agents/planner.md \
+  --target-format copilot \
+  --output .github/agents/planner.agent.md
+
+# Auto-detect formats and auto-generate output filename
+python -m cli.main \
+  --convert-file my-agent.md \
+  --target-format copilot
 ```
 
 ### Testing
@@ -175,7 +185,7 @@ agent-sync/
 │   ├── copilot.py            # GitHub Copilot adapter
 │   └── example.py            # Template for new adapters
 ├── cli/                       # Command-line interface
-│   └── main.py               # CLI entry point (STUB)
+│   └── main.py               # CLI entry point
 ├── tests/                     # Test suite
 │   ├── test_adapters.py      # Adapter tests
 │   ├── test_registry.py      # Registry tests
@@ -201,11 +211,11 @@ agent-sync/
 - Claude and Copilot adapters
 - Format registry
 - State manager
+- CLI interface (directory sync and single-file conversion)
+- Universal orchestrator
 
 **In Development:**
-- Universal orchestrator
-- CLI interface
-- Test suite
+- Test suite (partial coverage)
 
 ## Adding New Format Support
 
@@ -223,3 +233,5 @@ agent-sync/
 
 3. Add tests in `tests/test_adapters.py`
 4. Add fixtures in `tests/fixtures/newformat/`
+- Keep all documentation very concise. Only what the engineers need to know.
+- All documentation is for the application developers. Not for the users!
