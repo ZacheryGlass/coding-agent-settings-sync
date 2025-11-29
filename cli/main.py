@@ -57,35 +57,45 @@ Examples:
         """
     )
 
-    # Required arguments
+    # Single-file conversion mode
+    parser.add_argument(
+        '--convert-file',
+        type=Path,
+        help='Single file to convert (mutually exclusive with --source-dir)'
+    )
+
+    parser.add_argument(
+        '--output',
+        type=Path,
+        help='Output file path for single-file conversion (auto-generated if not specified)'
+    )
+
+    # Directory sync mode arguments (required for directory sync, not for file conversion)
     parser.add_argument(
         '--source-dir',
         type=Path,
-        required=True,
         help='Source directory containing configuration files'
     )
 
     parser.add_argument(
         '--target-dir',
         type=Path,
-        required=True,
         help='Target directory for synced configuration files'
     )
 
+    # Format arguments (optional for auto-detection in file mode)
     parser.add_argument(
         '--source-format',
         type=str,
-        required=True,
         choices=['claude', 'copilot'],
-        help='Source format name'
+        help='Source format name (auto-detected if not specified)'
     )
 
     parser.add_argument(
         '--target-format',
         type=str,
-        required=True,
         choices=['claude', 'copilot'],
-        help='Target format name'
+        help='Target format name (auto-detected from output if not specified)'
     )
 
     # Optional arguments
@@ -161,6 +171,120 @@ def setup_registry() -> FormatRegistry:
     return registry
 
 
+def convert_single_file(args) -> int:
+    """
+    Convert a single file from one format to another.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    registry = setup_registry()
+
+    # 1. Validate source file
+    source_file = args.convert_file.expanduser().resolve()
+    if not source_file.exists():
+        print(f"Error: File not found: {source_file}", file=sys.stderr)
+        return 1
+    if source_file.is_dir():
+        print(f"Error: Path is a directory, not a file: {source_file}", file=sys.stderr)
+        return 1
+
+    # 2. Determine source adapter (explicit or auto-detect)
+    if args.source_format:
+        source_adapter = registry.get_adapter(args.source_format)
+        if not source_adapter:
+            print(f"Error: Unknown source format: {args.source_format}", file=sys.stderr)
+            return 1
+    else:
+        source_adapter = registry.detect_format(source_file)
+        if not source_adapter:
+            print(f"Error: Cannot auto-detect format for: {source_file}", file=sys.stderr)
+            return 1
+
+    # 3. Determine target adapter (explicit or from output extension)
+    if args.target_format:
+        target_adapter = registry.get_adapter(args.target_format)
+        if not target_adapter:
+            print(f"Error: Unknown target format: {args.target_format}", file=sys.stderr)
+            return 1
+    elif args.output:
+        target_adapter = registry.detect_format(args.output)
+        if not target_adapter:
+            print(f"Error: Cannot auto-detect target format from: {args.output}", file=sys.stderr)
+            return 1
+    else:
+        print("Error: --target-format or --output required for conversion", file=sys.stderr)
+        return 1
+
+    # 4. Determine output path (explicit or auto-generate)
+    if args.output:
+        output_file = args.output.expanduser().resolve()
+    else:
+        # Auto-generate: same directory, base name + target extension
+        base_name = source_file.stem
+        # Handle .agent.md extension specially
+        if source_file.name.endswith('.agent.md'):
+            base_name = source_file.name[:-9]  # Remove .agent.md
+        output_file = source_file.parent / f"{base_name}{target_adapter.file_extension}"
+
+    # 5. Get config type
+    config_type_map = {
+        'agent': ConfigType.AGENT,
+        'permission': ConfigType.PERMISSION,
+        'prompt': ConfigType.PROMPT
+    }
+    config_type = config_type_map[args.config_type]
+
+    # 6. Build conversion options
+    conversion_options = {}
+    if getattr(args, 'add_argument_hint', False):
+        conversion_options['add_argument_hint'] = True
+    if getattr(args, 'add_handoffs', False):
+        conversion_options['add_handoffs'] = True
+
+    # 7. Perform conversion
+    try:
+        if args.verbose:
+            print(f"Converting {source_file} -> {output_file}")
+            print(f"  Source format: {source_adapter.format_name}")
+            print(f"  Target format: {target_adapter.format_name}")
+
+        # Read and convert to canonical
+        canonical = source_adapter.read(source_file, config_type)
+
+        # Convert to target format
+        output_content = target_adapter.from_canonical(
+            canonical, config_type, conversion_options if conversion_options else None
+        )
+
+        if args.dry_run:
+            print(f"Would write to: {output_file}")
+            if args.verbose:
+                print("--- Output content ---")
+                print(output_content)
+            return 0
+
+        # Write output
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(output_content)
+
+        if args.verbose:
+            print(f"Successfully converted to {output_file}")
+
+        return 0
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        if args.verbose:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+        return 1
+
+
 def main(argv: Optional[list] = None):
     """
     Main entry point for CLI.
@@ -173,6 +297,28 @@ def main(argv: Optional[list] = None):
     """
     parser = create_parser()
     args = parser.parse_args(argv)
+
+    # Route to single-file conversion mode if --convert-file is specified
+    if args.convert_file:
+        # Validate mutual exclusivity
+        if args.source_dir:
+            print("Error: --convert-file and --source-dir are mutually exclusive", file=sys.stderr)
+            return 1
+        return convert_single_file(args)
+
+    # Directory sync mode - validate required arguments
+    if not args.source_dir:
+        print("Error: --source-dir is required for directory sync", file=sys.stderr)
+        return 1
+    if not args.target_dir:
+        print("Error: --target-dir is required for directory sync", file=sys.stderr)
+        return 1
+    if not args.source_format:
+        print("Error: --source-format is required for directory sync", file=sys.stderr)
+        return 1
+    if not args.target_format:
+        print("Error: --target-format is required for directory sync", file=sys.stderr)
+        return 1
 
     try:
         # 1. Expand and validate paths
