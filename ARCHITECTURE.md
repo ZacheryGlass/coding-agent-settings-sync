@@ -186,7 +186,7 @@ adapters/
 - Tools: Array
 - Model: Full names (Claude Sonnet 4)
 - Unique fields: argument-hint, handoffs, target, mcp-servers
-- Handlers: `CopilotAgentHandler`
+- Handlers: `CopilotAgentHandler`, `CopilotPermissionHandler`
 
 ### Adding New Adapters
 
