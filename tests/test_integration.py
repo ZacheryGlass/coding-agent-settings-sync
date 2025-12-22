@@ -37,47 +37,59 @@ def registry():
     return reg
 
 
-@pytest.fixture
-def test_results_dir():
-    """Create persistent test results directory."""
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_results_session():
+    """Clean up test results directory once at the start of the session."""
     results_dir = Path("test_results")
-    if not results_dir.exists():
-        results_dir.mkdir()
-    return results_dir
+    if results_dir.exists():
+        import shutil
+        shutil.rmtree(results_dir)
+
+
+@pytest.fixture
+def test_results_dir(request):
+    """
+    Create persistent test results directory for the specific test.
+    Structure: test_results/<test_name>/
+    """
+    base_dir = Path("test_results")
+    if not base_dir.exists():
+        base_dir.mkdir()
+    
+    # Create specific dir for this test
+    test_dir = base_dir / request.node.name
+    if test_dir.exists():
+        import shutil
+        shutil.rmtree(test_dir)
+    test_dir.mkdir()
+    
+    return test_dir
 
 
 @pytest.fixture
 def state_file(test_results_dir):
-    """Create persistent state file path."""
+    """Create persistent state file path in test dir."""
     return test_results_dir / "test_sync_state.json"
 
 
 @pytest.fixture
 def state_manager(state_file):
     """Create state manager with persistent state file."""
-    if state_file.exists():
-        state_file.unlink()
     return SyncStateManager(state_file)
 
 
 @pytest.fixture
 def claude_dir(test_results_dir):
-    """Create persistent Claude agents directory."""
+    """Create persistent Claude agents directory in test dir."""
     d = test_results_dir / "claude_agents"
-    if d.exists():
-        import shutil
-        shutil.rmtree(d)
     d.mkdir()
     return d
 
 
 @pytest.fixture
 def copilot_dir(test_results_dir):
-    """Create persistent Copilot agents directory."""
+    """Create persistent Copilot agents directory in test dir."""
     d = test_results_dir / "copilot_agents"
-    if d.exists():
-        import shutil
-        shutil.rmtree(d)
     d.mkdir()
     return d
 
