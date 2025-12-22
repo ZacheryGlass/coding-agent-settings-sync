@@ -25,11 +25,12 @@ This adapter:
 
 import re
 import yaml
+import json
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 
 from core.adapter_interface import FormatAdapter
-from core.canonical_models import CanonicalAgent, ConfigType
+from core.canonical_models import CanonicalAgent, CanonicalPermission, ConfigType
 
 
 class ClaudeAdapter(FormatAdapter):
@@ -54,39 +55,60 @@ class ClaudeAdapter(FormatAdapter):
 
     @property
     def supported_config_types(self) -> List[ConfigType]:
-        # TODO: Add ConfigType.PERMISSION when implementing settings.json support
-        return [ConfigType.AGENT]
+        return [ConfigType.AGENT, ConfigType.PERMISSION]
 
     def can_handle(self, file_path: Path) -> bool:
         """
-        Check if file is a Claude agent file.
+        Check if file is a Claude agent file or settings file.
 
         Claude agents are .md files that are NOT .agent.md files.
+        Settings are settings.json or settings.local.json.
         """
+        if file_path.name in ('settings.json', 'settings.local.json'):
+            return True
+            
         return (file_path.suffix == '.md' and
                 not file_path.name.endswith('.agent.md'))
 
-    def read(self, file_path: Path, config_type: ConfigType) -> CanonicalAgent:
+    def read(self, file_path: Path, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission]:
         """Read Claude agent file and convert to canonical."""
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         return self.to_canonical(content, config_type)
 
-    def write(self, canonical_obj: CanonicalAgent, file_path: Path, config_type: ConfigType,
+    def write(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission], file_path: Path, config_type: ConfigType,
               options: dict = None):
         """Write canonical agent to Claude format file."""
         content = self.from_canonical(canonical_obj, config_type, options)
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-    def to_canonical(self, content: str, config_type: ConfigType) -> CanonicalAgent:
+    def to_canonical(self, content: str, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission]:
         """
         Convert Claude format to canonical.
 
-        Parses YAML frontmatter and markdown body, extracts fields,
-        and creates CanonicalAgent with preserved metadata.
+        Parses YAML frontmatter and markdown body for agents.
+        Parses JSON for permissions.
         """
         self.warnings = []
+
+        if config_type == ConfigType.PERMISSION:
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                raise ValueError("Invalid JSON in settings file")
+
+            permissions = data.get('permissions', {})
+            # Handle case where permissions might be missing or empty
+            if not permissions:
+                permissions = {}
+
+            return CanonicalPermission(
+                allow=permissions.get('allow', []),
+                deny=permissions.get('deny', []),
+                ask=permissions.get('ask', []),
+                source_format='claude'
+            )
 
         # Parse YAML frontmatter
         match = re.match(r'^---\n(.*?)\n---\n(.*)$', content, re.DOTALL)
@@ -115,16 +137,29 @@ class ClaudeAdapter(FormatAdapter):
 
         return agent
 
-    def from_canonical(self, canonical_obj: CanonicalAgent, config_type: ConfigType,
+    def from_canonical(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission], config_type: ConfigType,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """
         Convert canonical to Claude format.
 
-        Generates YAML frontmatter with Claude-specific fields and
-        markdown body.
+        Generates YAML frontmatter for agents.
+        Generates JSON for permissions.
         """
         self.warnings = []
         options = options or {}
+
+        if config_type == ConfigType.PERMISSION:
+            if not isinstance(canonical_obj, CanonicalPermission):
+                raise ValueError("Expected CanonicalPermission for PERMISSION config type")
+
+            data = {
+                "permissions": {
+                    "allow": canonical_obj.allow,
+                    "deny": canonical_obj.deny,
+                    "ask": canonical_obj.ask
+                }
+            }
+            return json.dumps(data, indent=2)
 
         # Build frontmatter
         frontmatter = {
