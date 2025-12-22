@@ -932,3 +932,102 @@ Test instructions.
 
         captured = capsys.readouterr()
         assert 'Converting' in captured.out or 'convert' in captured.out.lower()
+class TestCLIPermissionSupport:
+    """Tests for CLI permission sync support."""
+
+    @pytest.fixture
+    def valid_dirs(self, tmp_path):
+        """Create valid source and target directories."""
+        source = tmp_path / "source"
+        source.mkdir()
+        target = tmp_path / "target"
+        target.mkdir()
+        return source, target
+
+    @pytest.fixture
+    def base_args(self, valid_dirs):
+        """Minimum valid arguments for CLI."""
+        source, target = valid_dirs
+        return [
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ]
+
+    def test_config_type_permission_argument(self, base_args):
+        """Test --config-type permission is accepted."""
+        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+            mock_instance = MagicMock()
+            mock_orch.return_value = mock_instance
+
+            result = main(base_args + ['--config-type', 'permission'])
+            
+            assert result == 0
+            # Verify correct ConfigType enum passed
+            call_kwargs = mock_orch.call_args.kwargs
+            assert call_kwargs['config_type'] == ConfigType.PERMISSION
+
+    def test_permission_file_conversion(self, tmp_path):
+        """Test --config-type permission with single file conversion."""
+        source_file = tmp_path / "settings.json"
+        source_file.write_text("{}")
+        
+        with patch('cli.main.setup_registry') as mock_setup:
+            # Mock registry and adapters
+            mock_registry = MagicMock()
+            mock_source_adapter = MagicMock()
+            mock_target_adapter = MagicMock()
+            
+            mock_source_adapter.format_name = "claude"
+            mock_target_adapter.format_name = "copilot"
+            mock_target_adapter.file_extension = ".perm.json"
+            mock_target_adapter.from_canonical.return_value = "mock content"
+            
+            mock_registry.get_adapter.side_effect = lambda fmt: {
+                'claude': mock_source_adapter,
+                'copilot': mock_target_adapter
+            }.get(fmt)
+            
+            mock_setup.return_value = mock_registry
+
+            result = main([
+                '--convert-file', str(source_file),
+                '--source-format', 'claude',
+                '--target-format', 'copilot',
+                '--config-type', 'permission'
+            ])
+
+            assert result == 0
+            
+            # Verify read called with ConfigType.PERMISSION
+            mock_source_adapter.read.assert_called_once()
+            assert mock_source_adapter.read.call_args[0][1] == ConfigType.PERMISSION
+            
+            # Verify from_canonical called with ConfigType.PERMISSION
+            mock_target_adapter.from_canonical.assert_called_once()
+            assert mock_target_adapter.from_canonical.call_args[0][1] == ConfigType.PERMISSION
+
+    def test_unsupported_format_error(self, base_args):
+        """Test error when format doesn't support permissions."""
+        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+            # Simulate orchestrator raising ValueError for unsupported config type
+            mock_orch.side_effect = ValueError("Format 'copilot' does not support permission")
+            
+            result = main(base_args + ['--config-type', 'permission'])
+            
+            assert result != 0
+
+    def test_permission_sync_dry_run(self, base_args):
+        """Test permission sync with dry-run."""
+        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+            mock_instance = MagicMock()
+            mock_orch.return_value = mock_instance
+            
+            result = main(base_args + ['--config-type', 'permission', '--dry-run'])
+            
+            assert result == 0
+            call_kwargs = mock_orch.call_args.kwargs
+            assert call_kwargs['config_type'] == ConfigType.PERMISSION
+            assert call_kwargs['dry_run'] is True
+
