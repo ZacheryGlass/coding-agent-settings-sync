@@ -215,7 +215,7 @@ class UniversalSyncOrchestrator:
         files_by_base_name: Dict[str, Dict[str, Any]] = {}
 
         # Discover source files
-        source_extension = self.source_adapter.file_extension
+        source_extension = self.source_adapter.get_file_extension(self.config_type)
         source_pattern = f"*{source_extension}"
         for file_path in self.source_dir.glob(source_pattern):
             if not self.source_adapter.can_handle(file_path):
@@ -229,7 +229,7 @@ class UniversalSyncOrchestrator:
             }
 
         # Discover target files
-        target_extension = self.target_adapter.file_extension
+        target_extension = self.target_adapter.get_file_extension(self.config_type)
         target_pattern = f"*{target_extension}"
         for file_path in self.target_dir.glob(target_pattern):
             if not self.target_adapter.can_handle(file_path):
@@ -393,7 +393,8 @@ class UniversalSyncOrchestrator:
                 # Determine target path
                 target_path = pair.target_path
                 if target_path is None:
-                    target_path = self.target_dir / f"{pair.base_name}{self.target_adapter.file_extension}"
+                    target_extension = self.target_adapter.get_file_extension(self.config_type)
+                    target_path = self.target_dir / f"{pair.base_name}{target_extension}"
 
                 # Write to target (unless dry run)
                 if not self.dry_run:
@@ -426,7 +427,8 @@ class UniversalSyncOrchestrator:
                 # Determine source path
                 source_path = pair.source_path
                 if source_path is None:
-                    source_path = self.source_dir / f"{pair.base_name}{self.source_adapter.file_extension}"
+                    source_extension = self.source_adapter.get_file_extension(self.config_type)
+                    source_path = self.source_dir / f"{pair.base_name}{source_extension}"
 
                 # Write to source (unless dry run)
                 if not self.dry_run:

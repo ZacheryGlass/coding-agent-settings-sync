@@ -58,6 +58,14 @@ class FormatAdapter(ABC):
         """
         pass
 
+    def get_file_extension(self, config_type: ConfigType) -> str:
+        """
+        Get file extension for a specific config type.
+
+        Defaults to the main file_extension property if not overridden.
+        """
+        return self.file_extension
+
     @property
     @abstractmethod
     def supported_config_types(self) -> List[ConfigType]:

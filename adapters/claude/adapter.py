@@ -36,6 +36,12 @@ class ClaudeAdapter(FormatAdapter):
     def file_extension(self) -> str:
         return ".md"
 
+    def get_file_extension(self, config_type: ConfigType) -> str:
+        """Claude uses .json for permissions (settings.json) and .md for agents."""
+        if config_type == ConfigType.PERMISSION:
+            return ".json"
+        return self.file_extension
+
     @property
     def supported_config_types(self) -> List[ConfigType]:
         return list(self._handlers.keys())

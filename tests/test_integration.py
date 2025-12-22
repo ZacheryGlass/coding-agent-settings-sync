@@ -1470,3 +1470,106 @@ Round trip instructions.
         assert "name: round-trip" in restored_content
         assert "Round trip test agent" in restored_content
         assert "Round trip instructions" in restored_content
+class TestPermissionIntegration:
+    """End-to-end integration tests for permission sync."""
+
+    @pytest.fixture
+    def claude_settings(self):
+        """Sample Claude settings JSON content."""
+        return {
+            "permissions": {
+                "allow": ["Bash(git diff:*)", "Read(./src/**)"],
+                "deny": ["WebFetch", "Read(./.env)"],
+                "ask": ["Bash(git push:*)"]
+            }
+        }
+
+    def test_end_to_end_permission_sync_claude_to_copilot(
+        self, registry, state_manager, claude_dir, copilot_dir, claude_settings
+    ):
+        """Test syncing permissions from Claude (settings.json) to Copilot."""
+        import json
+        # Arrange
+        claude_file = claude_dir / "settings.json"
+        claude_file.write_text(json.dumps(claude_settings))
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=claude_dir,
+            target_dir=copilot_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        # Claude settings.json base name is 'settings'
+        # Copilot adapter get_file_extension(PERMISSION) is '.perm.json'
+        copilot_file = copilot_dir / "settings.perm.json"
+        assert copilot_file.exists(), "Copilot permission file should be created"
+        assert "not explicitly supported" in copilot_file.read_text()
+
+    def test_permission_state_persistence(
+        self, registry, state_file, claude_dir, copilot_dir, claude_settings
+    ):
+        """Test that permission sync state is persisted."""
+        import json
+        # Arrange
+        state_manager = SyncStateManager(state_file)
+        claude_file = claude_dir / "settings.json"
+        claude_file.write_text(json.dumps(claude_settings))
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=claude_dir,
+            target_dir=copilot_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        
+        # Act
+        orchestrator.sync()
+        
+        # Assert state file exists and has entry for 'settings'
+        assert state_file.exists()
+        
+        state_manager2 = SyncStateManager(state_file)
+        file_state = state_manager2.get_file_state(claude_dir, copilot_dir, "settings")
+        assert file_state is not None
+        assert file_state['last_action'] == 'source_to_target'
+
+    def test_bidirectional_permission_sync(
+        self, registry, state_manager, claude_dir, copilot_dir, claude_settings
+    ):
+        """Test bidirectional permission sync setup."""
+        import json
+        # Arrange: Create Claude settings
+        claude_file = claude_dir / "settings.json"
+        claude_file.write_text(json.dumps(claude_settings))
+        
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=claude_dir,
+            target_dir=copilot_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='both',
+            dry_run=False
+        )
+        orchestrator.sync()
+        
+        # Assert
+        assert (copilot_dir / "settings.perm.json").exists()
+        assert orchestrator.stats['target_to_source'] == 0
+        
+        

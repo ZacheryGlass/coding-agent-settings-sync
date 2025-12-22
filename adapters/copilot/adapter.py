@@ -10,20 +10,22 @@ from typing import List, Optional, Dict, Any
 from core.adapter_interface import FormatAdapter
 from core.canonical_models import CanonicalAgent, ConfigType
 from .handlers.agent_handler import CopilotAgentHandler
+from .handlers.perm_handler import CopilotPermissionHandler
 
 
 class CopilotAdapter(FormatAdapter):
     """
     Adapter for GitHub Copilot format.
 
-    Coordinates between different config type handlers (currently only AGENT).
+    Coordinates between different config type handlers.
     """
 
     def __init__(self):
         """Initialize adapter with handlers."""
         self.warnings: List[str] = []
         self._handlers = {
-            ConfigType.AGENT: CopilotAgentHandler()
+            ConfigType.AGENT: CopilotAgentHandler(),
+            ConfigType.PERMISSION: CopilotPermissionHandler()
         }
 
     @property
@@ -33,6 +35,12 @@ class CopilotAdapter(FormatAdapter):
     @property
     def file_extension(self) -> str:
         return ".agent.md"
+
+    def get_file_extension(self, config_type: ConfigType) -> str:
+        """Copilot uses .perm.json for permissions (placeholder) and .agent.md for agents."""
+        if config_type == ConfigType.PERMISSION:
+            return ".perm.json"
+        return self.file_extension
 
     @property
     def supported_config_types(self) -> List[ConfigType]:
