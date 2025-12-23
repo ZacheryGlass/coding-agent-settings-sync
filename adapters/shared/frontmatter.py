@@ -52,8 +52,58 @@ def parse_yaml_frontmatter(content: str) -> Tuple[dict, str]:
         raise ValueError("No YAML frontmatter found")
 
     yaml_content, body = match.groups()
-    frontmatter = yaml.safe_load(yaml_content)
+    try:
+        frontmatter = yaml.safe_load(yaml_content)
+    except yaml.YAMLError:
+        # Fallback to loose parsing for malformed YAML
+        # (e.g. unquoted multiline strings without indentation)
+        frontmatter = _parse_loose_yaml(yaml_content)
+        
     return frontmatter, body.strip()
+
+
+def _parse_loose_yaml(content: str) -> dict:
+    """
+    Parse loose/invalid YAML content manually.
+    
+    Handles cases like:
+    key: value
+    continued value without indentation
+    next_key: value
+    """
+    data = {}
+    current_key = None
+    current_value = []
+    
+    # Regex for a key at start of line: "key:" or "my-key:"
+    # We assume keys don't have spaces for this simple fallback
+    key_pattern = re.compile(r'^([a-zA-Z0-9_-]+):\s*(.*)$')
+    
+    for line in content.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+            
+        match = key_pattern.match(line)
+        if match:
+            # Save previous key if exists
+            if current_key:
+                data[current_key] = ' '.join(current_value).strip()
+            
+            # Start new key
+            current_key = match.group(1)
+            value_part = match.group(2)
+            current_value = [value_part] if value_part else []
+        else:
+            # Continuation of previous key
+            if current_key:
+                current_value.append(line)
+    
+    # Save last key
+    if current_key:
+        data[current_key] = ' '.join(current_value).strip()
+        
+    return data
 
 
 def build_yaml_frontmatter(frontmatter: dict, body: str) -> str:
