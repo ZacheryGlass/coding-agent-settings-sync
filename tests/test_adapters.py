@@ -355,6 +355,21 @@ Instructions with special characters: colons, "quotes", and more.
         assert "colons" in agent.description
         assert "quotes" in agent.description
 
+    def test_complex_description_with_newlines_and_quotes(self, adapter):
+        """Test handling of complex descriptions with newlines and quotes."""
+        content = r"""---
+name: complex-agent
+description: "Start of description.\n\n<example>\nContext: \"Quoted text\"\nUser: ...\n</example>"
+tools: Read
+model: sonnet
+---
+Instructions.
+"""
+        agent = adapter.to_canonical(content, ConfigType.AGENT)
+        assert agent.name == "complex-agent"
+        assert "\n\n<example>\n" in agent.description
+        assert 'Context: "Quoted text"' in agent.description
+
     def test_multiline_instructions(self, adapter):
         """Test preservation of multiline markdown instructions."""
         fixture_path = Path("tests/fixtures/claude/edge-cases/multiline-instructions.md")
