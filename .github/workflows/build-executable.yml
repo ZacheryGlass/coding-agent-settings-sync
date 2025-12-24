@@ -1,9 +1,13 @@
-name: Build Standalone Executable
+name: Build and Release
 
 on:
   workflow_dispatch:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-linux:
@@ -25,12 +29,13 @@ jobs:
     - name: Build with PyInstaller
       run: |
         pyinstaller --clean agent-sync.spec
+        mv dist/agent-sync dist/agent-sync-linux
         
     - name: Upload Linux Artifact
       uses: actions/upload-artifact@v4
       with:
         name: agent-sync-linux
-        path: dist/agent-sync
+        path: dist/agent-sync-linux
 
   build-windows:
     runs-on: windows-latest
@@ -51,9 +56,38 @@ jobs:
     - name: Build with PyInstaller
       run: |
         pyinstaller --clean agent-sync.spec
+        mv dist/agent-sync.exe dist/agent-sync-windows.exe
         
     - name: Upload Windows Artifact
       uses: actions/upload-artifact@v4
       with:
         name: agent-sync-windows.exe
-        path: dist/agent-sync.exe
+        path: dist/agent-sync-windows.exe
+
+  publish:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download Linux Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: agent-sync-linux
+        path: dist
+        
+    - name: Download Windows Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: agent-sync-windows.exe
+        path: dist
+        
+    - name: Create Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create ${{ github.ref_name }} \
+          dist/agent-sync-linux \
+          dist/agent-sync-windows.exe \
+          --generate-notes \
+          --title "Release ${{ github.ref_name }}"

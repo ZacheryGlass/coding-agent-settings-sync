@@ -20,8 +20,17 @@ You can package the application as a standalone executable (no Python installati
 ### Using GitHub Actions (Recommended)
 
 This repository includes a GitHub Action to automatically build both Linux and Windows binaries.
+
+**Automated Releases:**
+Simply push a tag starting with `v` (e.g., `v1.0.0`) to the repository. The workflow will automatically:
+1. Build the binaries for Linux and Windows.
+2. Create a new GitHub Release.
+3. Upload the binaries as assets.
+4. Generate release notes from the commit history.
+
+**Manual Trigger:**
 1. Go to the "Actions" tab in the repository.
-2. Select "Build Standalone Executable".
+2. Select "Build and Release".
 3. Click "Run workflow".
 4. Download the artifacts from the completed run.
 
