@@ -46,6 +46,6 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 
 [tool.setuptools.packages.find]
-where = "."
+where = ["."]
 include = ["cli*", "core*", "adapters*", "gui*", "scripts*"]
 exclude = ["tests*", "build*", "dist*"]

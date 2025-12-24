@@ -100,3 +100,4 @@ ipython_config.py
 # Test results
 test_results/
 .github/agents/*
+core/_version.py
