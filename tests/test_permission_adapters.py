@@ -20,15 +20,9 @@ class TestClaudePermissionAdapter:
         assert adapter.can_handle(Path("my-agent.md"))
 
     def test_to_canonical_permissions(self, adapter):
-        content = json.dumps({
-            "permissions": {
-                "allow": ["Bash(ls)", "Read(src/*)"],
-                "deny": ["Read(.env)", "Bash(rm *)"],
-                "ask": ["Bash(git push)"]
-            },
-            "other_setting": "value"
-        })
-        
+        fixture_path = Path("tests/fixtures/claude/permissions/full-settings.json")
+        content = fixture_path.read_text()
+
         perm = adapter.to_canonical(content, ConfigType.PERMISSION)
         
         assert isinstance(perm, CanonicalPermission)
@@ -58,13 +52,16 @@ class TestClaudePermissionAdapter:
         # But for now, let's just check the present values.
 
     def test_read_invalid_json(self, adapter):
+        fixture_path = Path("tests/fixtures/claude/permissions/invalid.json")
+        content = fixture_path.read_text()
         with pytest.raises(ValueError):
-            adapter.to_canonical("{invalid_json", ConfigType.PERMISSION)
+            adapter.to_canonical(content, ConfigType.PERMISSION)
 
     def test_read_missing_permissions_key(self, adapter):
         # Should handle files that are valid JSON but missing permissions key gracefully?
         # Or return empty permissions?
-        content = json.dumps({"foo": "bar"})
+        fixture_path = Path("tests/fixtures/claude/permissions/no-permissions-key.json")
+        content = fixture_path.read_text()
         perm = adapter.to_canonical(content, ConfigType.PERMISSION)
         assert isinstance(perm, CanonicalPermission)
         assert perm.allow == []
