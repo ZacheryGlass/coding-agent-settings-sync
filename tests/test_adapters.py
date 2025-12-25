@@ -16,7 +16,7 @@ Status: IMPLEMENTED
 import pytest
 from pathlib import Path
 
-from core.canonical_models import CanonicalAgent, ConfigType
+from core.canonical_models import CanonicalAgent, CanonicalSlashCommand, ConfigType
 from adapters import ClaudeAdapter, CopilotAdapter
 
 
@@ -393,6 +393,313 @@ Instructions.
         adapter.to_canonical(sample_claude_content, ConfigType.AGENT)
         warnings = adapter.get_conversion_warnings()
         assert isinstance(warnings, list)
+
+    # ==================== SLASH-COMMAND TESTS ====================
+
+    # Fixtures for slash-command tests
+
+    @pytest.fixture
+    def minimal_slash_command_content(self):
+        """Minimal slash-command (no frontmatter, just body)."""
+        return """Review this code for bugs and suggest improvements.
+"""
+
+    @pytest.fixture
+    def simple_slash_command_content(self):
+        """Simple slash-command with basic frontmatter."""
+        return """---
+description: Explain code in simple terms
+---
+
+Explain the following code: $ARGUMENTS
+
+Make it beginner-friendly and include examples.
+"""
+
+    @pytest.fixture
+    def full_slash_command_content(self):
+        """Full-featured slash-command with all fields."""
+        return """---
+allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*)
+argument-hint: [message]
+description: Create a git commit
+model: claude-3-5-haiku-20241022
+---
+
+## Context
+
+- Current git status: !`git status`
+- Current git diff (staged and unstaged changes): !`git diff HEAD`
+- Current branch: !`git branch --show-current`
+- Recent commits: !`git log --oneline -10`
+
+## Your task
+
+Create a git commit with message: $ARGUMENTS
+
+Follow these guidelines:
+- Use conventional commit format
+- Keep message concise but descriptive
+- Stage relevant files before committing
+"""
+
+    @pytest.fixture
+    def canonical_slash_command_minimal(self):
+        """Minimal CanonicalSlashCommand for serialization tests."""
+        return CanonicalSlashCommand(
+            name="test-command",
+            description="Test slash command",
+            instructions="Test command instructions.",
+            source_format="claude"
+        )
+
+    @pytest.fixture
+    def canonical_slash_command_full(self):
+        """Full CanonicalSlashCommand with all fields."""
+        return CanonicalSlashCommand(
+            name="full-command",
+            description="Full slash command with all fields",
+            instructions="Full command instructions with $ARGUMENTS placeholder.",
+            argument_hint="[arg1] [arg2]",
+            model="haiku",
+            allowed_tools=["Bash(git:*)", "Read", "Write"],
+            source_format="claude"
+        )
+
+    # Phase 1: Property Tests
+
+    def test_slash_command_config_type(self, adapter):
+        """Test that ClaudeSlashCommandHandler returns correct config type."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        # and registered in ClaudeAdapter
+        handler = adapter._get_handler(ConfigType.SLASH_COMMAND)
+        assert handler.config_type == ConfigType.SLASH_COMMAND
+
+    # Phase 2: to_canonical() Tests
+
+    def test_slash_command_to_canonical_minimal(self, adapter, tmp_path):
+        """Test parsing minimal slash-command (no frontmatter)."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        fixture_path = Path("tests/fixtures/claude/slash-commands/minimal.md")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name should be derived from filename
+        assert slash_command.name == "minimal"
+        # Description should be empty or have a default value
+        assert slash_command.description == "" or slash_command.description is None
+        # Instructions should be the body content
+        assert "Review this code for bugs and suggest improvements" in slash_command.instructions
+        # Optional fields should be None or empty
+        assert slash_command.argument_hint is None or slash_command.argument_hint == ""
+        assert slash_command.model is None
+        assert slash_command.allowed_tools == [] or slash_command.allowed_tools is None
+        assert slash_command.source_format == "claude"
+
+    def test_slash_command_to_canonical_simple(self, adapter, tmp_path):
+        """Test parsing simple slash-command with basic frontmatter."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        fixture_path = Path("tests/fixtures/claude/slash-commands/simple.md")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name derived from filename (since no 'name' in frontmatter)
+        assert slash_command.name == "simple"
+        # Description from frontmatter
+        assert slash_command.description == "Explain code in simple terms"
+        # Instructions should contain $ARGUMENTS placeholder
+        assert "$ARGUMENTS" in slash_command.instructions
+        assert "beginner-friendly" in slash_command.instructions
+        assert slash_command.source_format == "claude"
+
+    def test_slash_command_to_canonical_full_featured(self, adapter, tmp_path):
+        """Test parsing full-featured slash-command with all fields."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        fixture_path = Path("tests/fixtures/claude/slash-commands/full-featured.md")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name from filename
+        assert slash_command.name == "full-featured"
+        # Description from frontmatter
+        assert slash_command.description == "Create a git commit"
+        # argument-hint from frontmatter
+        assert slash_command.argument_hint == "[message]"
+        # Model from frontmatter
+        assert slash_command.model == "claude-3-5-haiku-20241022" or slash_command.model == "haiku"
+        # allowed-tools should be parsed into a list
+        assert isinstance(slash_command.allowed_tools, list)
+        assert len(slash_command.allowed_tools) >= 3
+        # Should contain git-related tools
+        assert any("git" in tool.lower() for tool in slash_command.allowed_tools)
+        # Instructions should contain bash execution syntax and $ARGUMENTS
+        assert "!`git" in slash_command.instructions or "git" in slash_command.instructions
+        assert "$ARGUMENTS" in slash_command.instructions
+        assert slash_command.source_format == "claude"
+
+    def test_slash_command_to_canonical_preserves_metadata(self, adapter):
+        """Test that format-specific fields are preserved in metadata."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        content = """---
+description: Test command
+allowed-tools: Read, Grep
+disable-model-invocation: true
+custom-field: custom-value
+---
+
+Test instructions.
+"""
+
+        slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+
+        # Claude-specific fields should be in metadata
+        # The exact metadata keys depend on implementation
+        assert slash_command.metadata is not None
+        # If 'disable-model-invocation' is Claude-specific, it should be in metadata
+        # This assertion may need adjustment based on actual implementation
+
+    # Phase 3: from_canonical() Tests
+
+    def test_slash_command_from_canonical_minimal(self, adapter, canonical_slash_command_minimal):
+        """Test generating minimal slash-command from canonical."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        output = adapter.from_canonical(canonical_slash_command_minimal, ConfigType.SLASH_COMMAND)
+
+        # Should have valid structure
+        assert isinstance(output, str)
+        # Body should contain instructions
+        assert "Test command instructions" in output
+        # For minimal command, frontmatter might be minimal or absent
+        # Check if it's valid markdown
+
+    def test_slash_command_from_canonical_full(self, adapter, canonical_slash_command_full):
+        """Test generating full slash-command with all fields."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+        output = adapter.from_canonical(canonical_slash_command_full, ConfigType.SLASH_COMMAND)
+
+        # Should have frontmatter
+        assert output.startswith("---\n") or "---\n" in output
+        # Should contain description
+        assert "description:" in output or "Full slash command with all fields" in output
+        # Should contain argument-hint
+        assert "argument-hint:" in output or "[arg1]" in output
+        # Should contain model
+        assert "model:" in output or "haiku" in output
+        # Should contain allowed-tools
+        assert "allowed-tools:" in output or "Bash(git:*)" in output
+        # Should contain instructions with placeholder
+        assert "$ARGUMENTS" in output
+        assert "Full command instructions" in output
+
+    # Phase 4: Round-Trip Tests
+
+    def test_slash_command_round_trip(self, adapter):
+        """Test Claude -> Canonical -> Claude preserves all data."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+
+        # Test with minimal fixture
+        minimal_path = Path("tests/fixtures/claude/slash-commands/minimal.md")
+        canonical1 = adapter.read(minimal_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+
+        # Test with simple fixture
+        simple_path = Path("tests/fixtures/claude/slash-commands/simple.md")
+        canonical1 = adapter.read(simple_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+
+        # Test with full-featured fixture
+        full_path = Path("tests/fixtures/claude/slash-commands/full-featured.md")
+        canonical1 = adapter.read(full_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.argument_hint == canonical2.argument_hint
+        assert canonical1.model == canonical2.model
+        assert canonical1.allowed_tools == canonical2.allowed_tools
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+
+    # Phase 5: Edge Cases
+
+    def test_slash_command_edge_cases(self, adapter):
+        """Test edge cases: complex allowed-tools, bash syntax, arguments."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+
+        # Test complex allowed-tools patterns
+        content_with_complex_tools = """---
+description: Complex tools test
+allowed-tools: Bash(git:*), Read, Write, Grep, Bash(npm *:*)
+---
+
+Test with complex tools.
+"""
+        slash_command = adapter.to_canonical(content_with_complex_tools, ConfigType.SLASH_COMMAND)
+        assert len(slash_command.allowed_tools) >= 4
+
+        # Test with-arguments fixture (positional arguments)
+        args_path = Path("tests/fixtures/claude/slash-commands/with-arguments.md")
+        slash_command = adapter.read(args_path, ConfigType.SLASH_COMMAND)
+        # Should preserve $1, $2, $3 in instructions
+        assert "$1" in slash_command.instructions
+        assert "$2" in slash_command.instructions
+        assert "$3" in slash_command.instructions
+
+        # Test with-file-refs fixture (@ syntax)
+        refs_path = Path("tests/fixtures/claude/slash-commands/with-file-refs.md")
+        slash_command = adapter.read(refs_path, ConfigType.SLASH_COMMAND)
+        # Should preserve @ file references
+        assert "@" in slash_command.instructions
+
+        # Test empty description
+        content_no_desc = """---
+argument-hint: test
+---
+
+No description here.
+"""
+        slash_command = adapter.to_canonical(content_no_desc, ConfigType.SLASH_COMMAND)
+        assert slash_command.description == "" or slash_command.description is None
+
+    # Phase 6: Error Handling
+
+    def test_slash_command_error_handling(self, adapter):
+        """Test handling of invalid YAML and missing required fields."""
+        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
+
+        # Test invalid YAML frontmatter
+        invalid_yaml = """---
+description: "Unclosed quote
+allowed-tools: Read
+---
+
+Instructions.
+"""
+        with pytest.raises((ValueError, Exception)):
+            adapter.to_canonical(invalid_yaml, ConfigType.SLASH_COMMAND)
+
+        # Test malformed frontmatter delimiters
+        malformed = """--
+description: Test
+--
+
+Instructions.
+"""
+        # Depending on implementation, this might raise an error or treat it as no frontmatter
+        # The behavior should be consistent with agent handler
+
+        # For slash-commands, if there's no frontmatter, it might be valid (like minimal.md)
+        # So this test might need adjustment based on actual implementation
 
 
 class TestCopilotAdapter:
