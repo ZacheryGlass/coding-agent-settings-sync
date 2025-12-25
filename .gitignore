@@ -1,5 +1,8 @@
 CLAUDE.md
 
+# User's local Claude configuration
+.claude/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
