@@ -12,7 +12,7 @@ Key components:
 - State manager (tracks sync history)
 """
 
-from .canonical_models import CanonicalAgent, CanonicalPermission, CanonicalPrompt, ConfigType
+from .canonical_models import CanonicalAgent, CanonicalPermission, CanonicalSlashCommand, ConfigType
 from .adapter_interface import FormatAdapter
 from .registry import FormatRegistry
 from .orchestrator import UniversalSyncOrchestrator
@@ -21,7 +21,7 @@ from .state_manager import SyncStateManager
 __all__ = [
     'CanonicalAgent',
     'CanonicalPermission',
-    'CanonicalPrompt',
+    'CanonicalSlashCommand',
     'ConfigType',
     'FormatAdapter',
     'FormatRegistry',

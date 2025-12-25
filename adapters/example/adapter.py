@@ -43,7 +43,7 @@ class ExampleAdapter(FormatAdapter):
             ConfigType.AGENT: ExampleAgentHandler()
             # TODO: Add more handlers as you support more config types
             # ConfigType.PERMISSION: ExamplePermissionHandler(),
-            # ConfigType.PROMPT: ExamplePromptHandler(),
+            # ConfigType.SLASH_COMMAND: ExampleSlashCommandHandler(),
         }
 
     @property

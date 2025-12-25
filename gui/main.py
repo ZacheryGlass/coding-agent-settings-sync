@@ -14,7 +14,7 @@ from adapters import ClaudeAdapter, CopilotAdapter
 CONFIG_TYPE_MAP = {
     'Agent': ConfigType.AGENT,
     'Permission': ConfigType.PERMISSION,
-    'Prompt': ConfigType.PROMPT
+    'Slash Command': ConfigType.SLASH_COMMAND
 }
 
 class SyncApp:

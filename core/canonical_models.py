@@ -23,7 +23,7 @@ class ConfigType(Enum):
     """Types of configuration that can be synced."""
     AGENT = "agent"
     PERMISSION = "permission"
-    PROMPT = "prompt"
+    SLASH_COMMAND = "slash_command"
 
 
 @dataclass
@@ -108,29 +108,55 @@ class CanonicalPermission:
 
 
 @dataclass
-class CanonicalPrompt:
+class CanonicalSlashCommand:
     """
-    Canonical representation of a saved prompt/snippet.
+    Canonical representation of a slash command / prompt file.
 
-    Some tools allow saving reusable prompts/snippets:
-    - Claude: Saved prompts
-    - Copilot: Not directly supported
-    - Cursor: Composer rules
+    Slash commands are reusable prompt templates that can be invoked via special syntax:
+    - Claude Code: Slash commands (.md files in .claude/commands/)
+    - Copilot: Prompt files (.prompt.md files in .github/prompts/)
 
     Attributes:
-        name: Prompt identifier
-        content: The actual prompt text
-        description: What this prompt does
-        category: Optional categorization (debugging, refactoring, etc.)
-        tags: Optional tags for filtering
-        metadata: Format-specific fields
-        source_format: Original format
+        name: Command identifier (from filename or frontmatter)
+        description: Brief description of what the command does
+        instructions: Markdown body content with command instructions
+        argument_hint: Optional usage guidance for command arguments
+        model: Optional model selection (requires name mapping between formats)
+        allowed_tools: Optional tool restrictions (Claude) or tool list (Copilot)
+        metadata: Format-specific fields preserved for round-trip conversion
+        source_format: Original format (claude, copilot, etc.)
+        version: Schema version for future compatibility
+
+    Examples:
+        Claude slash command:
+            name: "commit"
+            description: "Create intelligent git commits"
+            instructions: "Create a git commit based on: $ARGUMENTS"
+            argument_hint: "[description] | [multi-commit request]"
+            model: "haiku"
+            allowed_tools: ["Bash(git:*)", "Read", "Write"]
+
+        Copilot prompt file:
+            name: "explain-code"
+            description: "Generate clear code explanations"
+            instructions: "Explain the following code: ${input:code}"
+            argument_hint: "code snippet to explain"
+            model: "gpt-4o"
+            metadata: {"copilot_agent": "ask", "copilot_tools": ["githubRepo"]}
     """
+    # Core fields (universally supported)
     name: str
-    content: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
+    description: str
+    instructions: str  # Markdown body content
+
+    # Optional fields (format-dependent)
+    argument_hint: Optional[str] = None
+    model: Optional[str] = None
+    allowed_tools: Optional[List[str]] = field(default_factory=list)
+
+    # Extended attributes (format-specific, preserved for round-trips)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # Tracking
     source_format: Optional[str] = None
     version: str = "1.0"

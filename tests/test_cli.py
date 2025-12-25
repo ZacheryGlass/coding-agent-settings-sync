@@ -111,8 +111,8 @@ class TestCLIArgumentParsing:
         assert args.config_type == 'agent'
 
     def test_config_type_choices(self, parser, base_args):
-        """Test --config-type accepts 'agent', 'permission', 'prompt'."""
-        for config_type in ['agent', 'permission', 'prompt']:
+        """Test --config-type accepts 'agent', 'permission', 'slash-command'."""
+        for config_type in ['agent', 'permission', 'slash-command']:
             args = parser.parse_args(base_args + ['--config-type', config_type])
             assert args.config_type == config_type
 

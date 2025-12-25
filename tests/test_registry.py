@@ -105,9 +105,9 @@ class TestFormatRegistry:
         assert registry.supports_config_type('claude', ConfigType.PERMISSION)
         assert registry.supports_config_type('copilot', ConfigType.PERMISSION)
 
-        # Neither supports PROMPT yet (not implemented)
-        assert not registry.supports_config_type('claude', ConfigType.PROMPT)
-        assert not registry.supports_config_type('copilot', ConfigType.PROMPT)
+        # Neither supports SLASH_COMMAND yet (not implemented)
+        assert not registry.supports_config_type('claude', ConfigType.SLASH_COMMAND)
+        assert not registry.supports_config_type('copilot', ConfigType.SLASH_COMMAND)
 
     def test_supports_config_type_nonexistent(self, registry):
         """Test checking support for non-existent format returns False."""
@@ -128,8 +128,8 @@ class TestFormatRegistry:
         assert 'copilot' in formats
         assert len(formats) == 2
 
-        # No adapters support PROMPT yet
-        formats = registry.get_formats_supporting(ConfigType.PROMPT)
+        # No adapters support SLASH_COMMAND yet
+        formats = registry.get_formats_supporting(ConfigType.SLASH_COMMAND)
         assert len(formats) == 0
 
     def test_unregister_adapter(self, registry):

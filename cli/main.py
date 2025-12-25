@@ -32,7 +32,7 @@ from adapters import ClaudeAdapter, CopilotAdapter
 CONFIG_TYPE_MAP = {
     'agent': ConfigType.AGENT,
     'permission': ConfigType.PERMISSION,
-    'prompt': ConfigType.PROMPT
+    'slash-command': ConfigType.SLASH_COMMAND
 }
 
 
@@ -111,7 +111,7 @@ Examples:
         '--config-type',
         type=str,
         default='agent',
-        choices=['agent', 'permission', 'prompt'],
+        choices=['agent', 'permission', 'slash-command'],
         help='Type of configuration to sync (default: agent)'
     )
 

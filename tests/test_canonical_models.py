@@ -4,7 +4,7 @@ Unit tests for canonical data models.
 Tests cover:
 - CanonicalAgent creation and manipulation
 - CanonicalPermission creation
-- CanonicalPrompt creation
+- CanonicalSlashCommand creation
 - Metadata handling
 - ConfigType enum
 
@@ -12,7 +12,7 @@ Status: STUB - To be implemented
 """
 
 import pytest
-from core.canonical_models import CanonicalAgent, CanonicalPermission, CanonicalPrompt, ConfigType
+from core.canonical_models import CanonicalAgent, CanonicalPermission, CanonicalSlashCommand, ConfigType
 
 
 class TestCanonicalAgent:
@@ -51,11 +51,11 @@ class TestCanonicalPermission:
         pass
 
 
-class TestCanonicalPrompt:
-    """Tests for CanonicalPrompt model."""
+class TestCanonicalSlashCommand:
+    """Tests for CanonicalSlashCommand model."""
 
-    def test_create_prompt(self):
-        """Test creating saved prompt."""
+    def test_create_slash_command(self):
+        """Test creating slash command."""
         # TODO: Implement
         pass
 
@@ -68,5 +68,5 @@ class TestConfigType:
         # TODO: Implement
         # assert ConfigType.AGENT.value == "agent"
         # assert ConfigType.PERMISSION.value == "permission"
-        # assert ConfigType.PROMPT.value == "prompt"
+        # assert ConfigType.SLASH_COMMAND.value == "slash_command"
         pass

@@ -75,7 +75,7 @@ class FormatAdapter(ABC):
         Examples:
         - Claude: [ConfigType.AGENT, ConfigType.PERMISSION]
         - Copilot: [ConfigType.AGENT]
-        - Cursor: [ConfigType.AGENT, ConfigType.PROMPT]
+        - Cursor: [ConfigType.AGENT, ConfigType.SLASH_COMMAND]
 
         Returns:
             List of ConfigType enums this adapter can handle
@@ -109,10 +109,10 @@ class FormatAdapter(ABC):
 
         Args:
             file_path: Path to file to read
-            config_type: Type of config to read (AGENT, PERMISSION, PROMPT)
+            config_type: Type of config to read (AGENT, PERMISSION, SLASH_COMMAND)
 
         Returns:
-            CanonicalAgent | CanonicalPermission | CanonicalPrompt
+            CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
 
         Raises:
             ValueError: If file format is invalid
@@ -127,7 +127,7 @@ class FormatAdapter(ABC):
         Write canonical format to file in this format.
 
         Args:
-            canonical_obj: CanonicalAgent | CanonicalPermission | CanonicalPrompt
+            canonical_obj: CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
             file_path: Where to write the file
             config_type: Type of config being written
             options: Optional conversion options (e.g., add_argument_hint)
@@ -151,7 +151,7 @@ class FormatAdapter(ABC):
             config_type: What type of config this is
 
         Returns:
-            CanonicalAgent | CanonicalPermission | CanonicalPrompt
+            CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
 
         Example:
             def to_canonical(self, content: str, config_type: ConfigType) -> CanonicalAgent:
