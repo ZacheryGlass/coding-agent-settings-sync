@@ -27,7 +27,7 @@ class ExampleAdapter(FormatAdapter):
     Example adapter template - coordinator pattern.
 
     This coordinator delegates to config-type-specific handlers.
-    As you add support for more config types (PERMISSION, PROMPT, etc.),
+    As you add support for more config types (PERMISSION, SLASH_COMMAND, etc.),
     add new handlers and register them in __init__().
 
     Replace this with your format's description, including:

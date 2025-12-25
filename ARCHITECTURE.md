@@ -35,7 +35,7 @@ Universal data structures that all formats convert to/from:
   - Metadata dict: Preserves format-specific fields
 
 - **CanonicalPermission**: Universal permission settings
-- **CanonicalPrompt**: Universal saved prompt
+- **CanonicalSlashCommand**: Universal slash command representation
 
 **Why metadata?**
 Format-specific fields (like Copilot's `handoffs` or Claude's `permissionMode`) are stored in metadata to enable lossless round-trip conversions.
@@ -130,7 +130,7 @@ Each format adapter uses a handler-based pattern to separate concerns by config 
 FormatAdapter (Coordinator)
     ├── AgentHandler (handles AGENT config type)
     ├── PermissionHandler (handles PERMISSION config type)
-    └── PromptHandler (handles PROMPT config type)
+    └── SlashCommandHandler (handles SLASH_COMMAND config type)
 ```
 
 **Benefits:**
@@ -203,7 +203,7 @@ Use `adapters/example/` as a template for implementing new format adapters.
    - Implement `to_canonical()` to parse your format
    - Implement `from_canonical()` to serialize to your format
    - Use shared utilities (`parse_yaml_frontmatter()`, etc.) where applicable
-4. Add more handlers for additional config types (permissions, prompts, etc.)
+4. Add more handlers for additional config types (permissions, slash commands, etc.)
 5. Register your adapter in `cli/main.py` or your application
 
 See `ClaudeAdapter` and `CopilotAdapter` for working examples of the handler-based pattern.

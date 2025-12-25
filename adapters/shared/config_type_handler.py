@@ -2,7 +2,7 @@
 Base interface for config type handlers.
 
 Handlers encapsulate the logic for converting a specific config type
-(AGENT, PERMISSION, PROMPT) between a format and canonical representation.
+(AGENT, PERMISSION, SLASH_COMMAND) between a format and canonical representation.
 """
 
 from abc import ABC, abstractmethod
@@ -43,7 +43,7 @@ class ConfigTypeHandler(ABC):
         The config type this handler processes.
 
         Returns:
-            ConfigType enum value (AGENT, PERMISSION, PROMPT, etc.)
+            ConfigType enum value (AGENT, PERMISSION, SLASH_COMMAND, etc.)
         """
         pass
 

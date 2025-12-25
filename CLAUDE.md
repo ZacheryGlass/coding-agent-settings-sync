@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a universal synchronization tool for AI coding agent configurations. It supports syncing between multiple AI tools (Claude Code, GitHub Copilot, and others) and multiple config types (agents, permissions, prompts).
+This is a universal synchronization tool for AI coding agent configurations. It supports syncing between multiple AI tools (Claude Code, GitHub Copilot, and others) and multiple config types (agents, permissions, slash commands).
 
 The project uses a hub-and-spoke architecture with canonical data models, enabling N-way sync with 2N converters instead of N² converters.
 
@@ -83,7 +83,7 @@ Format A → Canonical Model ← Format B
 1. **core/canonical_models.py**
    - `CanonicalAgent`: Universal agent representation
    - `CanonicalPermission`: Universal permission representation
-   - `CanonicalPrompt`: Universal prompt representation
+   - `CanonicalSlashCommand`: Universal slash command representation
    - Metadata dictionary preserves format-specific fields for round-trip fidelity
 
 2. **core/adapter_interface.py**
@@ -213,7 +213,7 @@ agent-sync/
 
 3. Implement handlers in `adapters/newformat/handlers/`:
    - `agent_handler.py`: Implement `to_canonical()` and `from_canonical()` for agents
-   - Add more handlers for permissions, prompts, etc. as needed
+   - Add more handlers for permissions, slash commands, etc. as needed
    - Use shared utilities from `adapters/shared/` where applicable
 
 4. Register in application:

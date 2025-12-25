@@ -94,7 +94,7 @@ class UniversalSyncOrchestrator:
             target_dir: Primary target directory
             source_format: Source format name (e.g., 'claude')
             target_format: Target format name (e.g., 'copilot')
-            config_type: Type of config to sync (AGENT, PERMISSION, PROMPT)
+            config_type: Type of config to sync (AGENT, PERMISSION, SLASH_COMMAND)
             format_registry: Registry containing adapters
             state_manager: State tracking manager
             direction: 'both', 'source-to-target', or 'target-to-source'
