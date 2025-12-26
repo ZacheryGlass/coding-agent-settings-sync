@@ -110,7 +110,7 @@ Format A → Canonical Model ← Format B
 
 6. **adapters/shared/** - Shared utilities and handler interface
 7. **adapters/claude/** - Claude Code adapter with agent and permission handlers
-8. **adapters/copilot/** - GitHub Copilot adapter with agent handler
+8. **adapters/copilot/** - GitHub Copilot adapter with agent and permission handlers
 9. **adapters/example/** - Template for new adapter implementations
 
 ### Key Design Decisions
@@ -189,14 +189,14 @@ agent-sync/
 
 **Functional:**
 - Core canonical models
-- Claude and Copilot adapters
+- Claude and Copilot adapters (agents and permissions)
 - Format registry
 - State manager
 - CLI interface (directory sync and single-file conversion)
 - Universal orchestrator
+- Bidirectional permission conversion (Copilot ↔ Claude)
 
 **In Development:**
-- Permission support
 - Additional format adapters
 
 ## Adding New Format Support
