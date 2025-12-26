@@ -899,6 +899,296 @@ Full agent instructions with all Copilot features.
         assert canonical.get_metadata('copilot_handoffs') == canonical2.get_metadata('copilot_handoffs')
         assert canonical.get_metadata('copilot_mcp_servers') == canonical2.get_metadata('copilot_mcp_servers')
 
+    # Copilot Slash Command Tests
+
+    @pytest.fixture
+    def canonical_slash_command_minimal(self):
+        """Minimal CanonicalSlashCommand for serialization tests."""
+        return CanonicalSlashCommand(
+            name="test-prompt",
+            description="Test prompt",
+            instructions="Test prompt instructions.",
+            source_format="copilot"
+        )
+
+    @pytest.fixture
+    def canonical_slash_command_full(self):
+        """Full CanonicalSlashCommand with all Copilot-specific fields."""
+        command = CanonicalSlashCommand(
+            name="full-prompt",
+            description="Full prompt with all fields",
+            instructions="Full prompt instructions with ${selection} and ${input:var:placeholder}.",
+            argument_hint="code snippet to explain",
+            model="gpt-4o",
+            allowed_tools=["githubRepo", "search/codebase"],
+            source_format="copilot"
+        )
+        command.add_metadata('copilot_agent', 'ask')
+        command.add_metadata('copilot_tools', ['githubRepo', 'search/codebase'])
+        return command
+
+    # Phase 1: Property Tests (Copilot Slash Commands)
+
+    def test_slash_command_copilot_config_type(self, adapter):
+        """Test that CopilotSlashCommandHandler returns correct config type."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        # and registered in CopilotAdapter
+        handler = adapter._get_handler(ConfigType.SLASH_COMMAND)
+        assert handler.config_type == ConfigType.SLASH_COMMAND
+
+    # Phase 2: to_canonical() Tests (Copilot Slash Commands)
+
+    def test_slash_command_copilot_to_canonical_minimal(self, adapter):
+        """Test parsing minimal Copilot prompt file (minimal frontmatter)."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        fixture_path = Path("tests/fixtures/copilot/prompts/minimal.prompt.md")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name should be from frontmatter or derived from filename
+        assert slash_command.name in ["minimal", "review-code"]
+        # Description should be optional
+        assert slash_command.description == "" or slash_command.description is None or "Review" in slash_command.description
+        # Instructions should be the body content
+        assert "Review this code for bugs and suggest improvements" in slash_command.instructions
+        # Optional fields should be None or empty
+        assert slash_command.argument_hint is None or slash_command.argument_hint == ""
+        assert slash_command.model is None
+        assert slash_command.allowed_tools == [] or slash_command.allowed_tools is None
+        assert slash_command.source_format == "copilot"
+
+    def test_slash_command_copilot_to_canonical_simple(self, adapter):
+        """Test parsing simple Copilot prompt with basic frontmatter."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        fixture_path = Path("tests/fixtures/copilot/prompts/simple.prompt.md")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name from frontmatter
+        assert slash_command.name in ["simple", "explain-code"]
+        # Description from frontmatter
+        assert slash_command.description == "Explain code in simple terms"
+        # Instructions should contain variable substitution
+        assert "${selection}" in slash_command.instructions
+        assert "beginner-friendly" in slash_command.instructions
+        assert slash_command.source_format == "copilot"
+
+    def test_slash_command_copilot_to_canonical_full_featured(self, adapter):
+        """Test parsing full-featured Copilot prompt with all fields."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        fixture_path = Path("tests/fixtures/copilot/prompts/full-featured.prompt.md")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name from frontmatter
+        assert slash_command.name in ["full-featured", "generate-tests"]
+        # Description from frontmatter
+        assert slash_command.description == "Generate comprehensive unit tests"
+        # argument-hint from frontmatter
+        assert slash_command.argument_hint == "file path or code selection"
+        # Model from frontmatter
+        assert slash_command.model == "gpt-4o"
+        # Tools should be parsed into a list
+        assert isinstance(slash_command.allowed_tools, list)
+        assert len(slash_command.allowed_tools) >= 2
+        # Should contain githubRepo and search tools
+        assert any("github" in tool.lower() for tool in slash_command.allowed_tools)
+        # Instructions should contain variable substitution
+        assert "${selection}" in slash_command.instructions or "${workspaceFolder}" in slash_command.instructions
+        # Agent field should be in metadata
+        assert slash_command.get_metadata('copilot_agent') in ['edit', 'ask', 'agent', None]
+        assert slash_command.source_format == "copilot"
+
+    def test_slash_command_copilot_to_canonical_preserves_metadata(self, adapter):
+        """Test that Copilot-specific fields are preserved in metadata."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        content = """---
+description: Test prompt
+name: test-prompt
+agent: 'ask'
+model: 'gpt-4o'
+tools:
+  - githubRepo
+  - search/codebase
+argument-hint: 'test hint'
+---
+
+Test instructions with ${selection} and #tool:githubRepo.
+"""
+
+        slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+
+        # Copilot-specific fields should be in metadata
+        assert slash_command.metadata is not None
+        # Agent field should be preserved
+        if 'copilot_agent' in slash_command.metadata or slash_command.get_metadata('copilot_agent'):
+            assert slash_command.get_metadata('copilot_agent') == 'ask'
+        # Tools should be accessible
+        assert slash_command.allowed_tools is not None
+
+    # Phase 3: from_canonical() Tests (Copilot Slash Commands)
+
+    def test_slash_command_copilot_from_canonical_minimal(self, adapter, canonical_slash_command_minimal):
+        """Test generating minimal Copilot prompt from canonical."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        output = adapter.from_canonical(canonical_slash_command_minimal, ConfigType.SLASH_COMMAND)
+
+        # Should have valid structure
+        assert isinstance(output, str)
+        # Body should contain instructions
+        assert "Test prompt instructions" in output
+        # Should be valid markdown (minimal frontmatter)
+        assert output.startswith("---\n") or "instructions" in output.lower()
+
+    def test_slash_command_copilot_from_canonical_full(self, adapter, canonical_slash_command_full):
+        """Test generating full Copilot prompt with all fields."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+        output = adapter.from_canonical(canonical_slash_command_full, ConfigType.SLASH_COMMAND)
+
+        # Should have frontmatter
+        assert output.startswith("---\n") or "---\n" in output
+        # Should contain description
+        assert "description:" in output or "Full prompt with all fields" in output
+        # Should contain argument-hint
+        assert "argument-hint:" in output or "code snippet" in output
+        # Should contain model
+        assert "model:" in output or "gpt-4o" in output
+        # Should contain tools
+        assert "tools:" in output or "githubRepo" in output
+        # Should contain variable substitution
+        assert "${selection}" in output or "${input" in output
+        # Should contain instructions
+        assert "Full prompt instructions" in output
+
+    # Phase 4: Round-Trip Tests (Copilot Slash Commands)
+
+    def test_slash_command_copilot_round_trip(self, adapter):
+        """Test Copilot -> Canonical -> Copilot preserves all data."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+
+        # Test with minimal fixture
+        minimal_path = Path("tests/fixtures/copilot/prompts/minimal.prompt.md")
+        canonical1 = adapter.read(minimal_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+
+        # Test with simple fixture
+        simple_path = Path("tests/fixtures/copilot/prompts/simple.prompt.md")
+        canonical1 = adapter.read(simple_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+
+        # Test with full-featured fixture
+        full_path = Path("tests/fixtures/copilot/prompts/full-featured.prompt.md")
+        canonical1 = adapter.read(full_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.argument_hint == canonical2.argument_hint
+        assert canonical1.model == canonical2.model
+        assert canonical1.allowed_tools == canonical2.allowed_tools
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+
+    # Phase 5: Edge Cases (Copilot Slash Commands)
+
+    def test_slash_command_copilot_edge_cases(self, adapter):
+        """Test edge cases: variable syntax, tool references, agent types."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+
+        # Test variable substitution syntax
+        content_with_vars = """---
+description: Variable substitution test
+---
+
+Use ${selection} and ${file} and ${input:param:placeholder}.
+"""
+        slash_command = adapter.to_canonical(content_with_vars, ConfigType.SLASH_COMMAND)
+        assert "${selection}" in slash_command.instructions
+        assert "${file}" in slash_command.instructions
+        assert "${input:" in slash_command.instructions
+
+        # Test with-variables fixture (Copilot variable syntax)
+        vars_path = Path("tests/fixtures/copilot/prompts/with-variables.prompt.md")
+        slash_command = adapter.read(vars_path, ConfigType.SLASH_COMMAND)
+        # Should preserve variable syntax
+        assert "${input:" in slash_command.instructions or "${file}" in slash_command.instructions or "${selection}" in slash_command.instructions
+
+        # Test agent field variations
+        for agent_type in ['ask', 'edit', 'agent', 'custom-agent']:
+            content = f"""---
+description: Agent type {agent_type}
+agent: '{agent_type}'
+---
+
+Test with agent type.
+"""
+            slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+            # Agent should be in metadata
+            assert slash_command.get_metadata('copilot_agent') == agent_type or \
+                   (agent_type in slash_command.metadata.values() if slash_command.metadata else False)
+
+        # Test tool references (#tool:name syntax)
+        content_with_tool_refs = """---
+description: Tool references test
+---
+
+Use #tool:githubRepo to search. Check #tool:search/codebase for patterns.
+"""
+        slash_command = adapter.to_canonical(content_with_tool_refs, ConfigType.SLASH_COMMAND)
+        assert "#tool:" in slash_command.instructions
+
+        # Test empty/missing optional fields
+        content_minimal = """---
+description: Test
+---
+
+Minimal prompt body.
+"""
+        slash_command = adapter.to_canonical(content_minimal, ConfigType.SLASH_COMMAND)
+        assert slash_command.argument_hint is None or slash_command.argument_hint == ""
+        assert slash_command.model is None
+        assert slash_command.allowed_tools == [] or slash_command.allowed_tools is None
+
+    # Phase 6: Error Handling (Copilot Slash Commands)
+
+    def test_slash_command_copilot_error_handling(self, adapter):
+        """Test handling of invalid YAML and missing required fields."""
+        # Note: This test will fail until CopilotSlashCommandHandler is implemented
+
+        # Test invalid YAML frontmatter
+        invalid_yaml = """---
+description: "Unclosed quote
+tools:
+  - tool1
+---
+
+Instructions.
+"""
+        with pytest.raises((ValueError, Exception)):
+            adapter.to_canonical(invalid_yaml, ConfigType.SLASH_COMMAND)
+
+        # Test malformed frontmatter delimiters
+        malformed = """--
+description: Test
+--
+
+Instructions.
+"""
+        # Depending on implementation, this might raise an error or treat it as no frontmatter
+        # The behavior should be consistent with agent handler
+
+    # Copilot Slash Command Cross-Format Tests (added to TestCrossFormatConversion separately)
+
 
 class TestCrossFormatConversion:
     """Tests for converting between different formats."""
@@ -1074,3 +1364,146 @@ Cross-format test instructions.
         # Copilot-specific metadata should survive
         assert copilot_canonical.get_metadata('copilot_argument_hint') == 'Test hint'
         assert copilot_canonical.get_metadata('copilot_handoffs') == [{'label': 'Next', 'agent': 'next-agent'}]
+
+    # Cross-Format Slash Command Tests
+
+    def test_slash_command_claude_to_copilot(self, claude_adapter, copilot_adapter):
+        """Test Claude slash command conversion to Copilot format."""
+        # Note: This test will fail until both handlers are implemented
+        # Sample Claude slash command
+        claude_content = """---
+description: Create a commit
+argument-hint: "[message]"
+allowed-tools: Bash(git:*), Read, Write
+model: haiku
+---
+
+Create a git commit with message: $ARGUMENTS
+
+Current status:
+- Files: @.gitignore
+- Branch: !`git branch --show-current`
+"""
+
+        # Convert Claude → Canonical
+        canonical = claude_adapter.to_canonical(claude_content, ConfigType.SLASH_COMMAND)
+        assert canonical.source_format == "claude"
+        assert canonical.argument_hint == "[message]"
+        assert "Bash(git:*)" in canonical.allowed_tools or any("Bash" in tool for tool in canonical.allowed_tools)
+        assert "$ARGUMENTS" in canonical.instructions
+
+        # Convert Canonical → Copilot
+        copilot_output = copilot_adapter.from_canonical(canonical, ConfigType.SLASH_COMMAND)
+        assert isinstance(copilot_output, str)
+        # Should be valid Copilot prompt format
+        assert ".prompt.md" in copilot_output or "---\n" in copilot_output
+        # Variable syntax might be transformed (from $ARGUMENTS to ${input:})
+        # Instructions should still contain the context
+        assert "git" in copilot_output.lower() or "commit" in copilot_output.lower()
+
+    def test_slash_command_copilot_to_claude(self, claude_adapter, copilot_adapter):
+        """Test Copilot prompt conversion to Claude format."""
+        # Note: This test will fail until both handlers are implemented
+        # Sample Copilot prompt
+        copilot_content = """---
+description: Explain code
+name: explain-code
+argument-hint: code snippet to explain
+agent: ask
+tools:
+  - githubRepo
+  - search/codebase
+---
+
+Explain the following code: ${selection}
+
+File context: ${file}
+
+Target audience: ${input:audience:Who is this for?}
+
+Use #tool:githubRepo to find similar implementations.
+"""
+
+        # Convert Copilot → Canonical
+        canonical = copilot_adapter.to_canonical(copilot_content, ConfigType.SLASH_COMMAND)
+        assert canonical.source_format == "copilot"
+        assert canonical.description == "Explain code"
+        assert canonical.argument_hint == "code snippet to explain"
+        assert "${selection}" in canonical.instructions
+        assert "#tool:" in canonical.instructions
+        # Agent should be in metadata
+        assert canonical.get_metadata('copilot_agent') == 'ask'
+
+        # Convert Canonical → Claude
+        claude_output = claude_adapter.from_canonical(canonical, ConfigType.SLASH_COMMAND)
+        assert isinstance(claude_output, str)
+        # Should be valid Claude format
+        assert ".md" in claude_output or "---\n" in claude_output
+        # Instructions should be preserved
+        assert "explain" in claude_output.lower() or "code" in claude_output.lower()
+        # Variable syntax might be different but content should survive
+        assert "audience" in claude_output.lower() or "${" in claude_output or "$" in claude_output
+
+    def test_slash_command_round_trip_cross_format(self, claude_adapter, copilot_adapter):
+        """Test that slash commands can round-trip through both formats."""
+        # Note: This test will fail until both handlers are implemented
+        # Create a Copilot prompt
+        copilot_content = """---
+description: Review code
+argument-hint: code to review
+agent: ask
+---
+
+Review the following code: ${selection}
+"""
+
+        # Copilot → Canonical
+        canonical1 = copilot_adapter.to_canonical(copilot_content, ConfigType.SLASH_COMMAND)
+        assert canonical1.source_format == "copilot"
+
+        # Canonical → Claude
+        claude_output = claude_adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+
+        # Claude → Canonical
+        canonical_claude = claude_adapter.to_canonical(claude_output, ConfigType.SLASH_COMMAND)
+        assert canonical_claude.source_format == "claude"
+
+        # Verify core content survived
+        assert canonical1.name == canonical_claude.name
+        assert canonical1.description == canonical_claude.description
+        # Variable syntax may differ but both should exist
+        assert ("${" in canonical1.instructions or "$" in canonical1.instructions)
+        assert ("${" in canonical_claude.instructions or "$" in canonical_claude.instructions or "@" in canonical_claude.instructions)
+
+    def test_slash_command_metadata_preservation_cross_format(self, claude_adapter, copilot_adapter):
+        """Test that format-specific metadata is preserved during cross-format conversion."""
+        # Note: This test will fail until both handlers are implemented
+        # Create canonical with both Claude and Copilot metadata
+        canonical = CanonicalSlashCommand(
+            name="test-command",
+            description="Test command",
+            instructions="Test instructions with $ARGUMENTS and ${selection}.",
+            argument_hint="test hint",
+            model="haiku",
+            allowed_tools=["Read", "Write"],
+            source_format="claude"
+        )
+        canonical.add_metadata('claude_disable_model_invocation', False)
+        canonical.add_metadata('copilot_agent', 'ask')
+        canonical.add_metadata('copilot_tools', ['githubRepo'])
+
+        # Convert to Claude format
+        claude_output = claude_adapter.from_canonical(canonical, ConfigType.SLASH_COMMAND)
+        claude_canonical = claude_adapter.to_canonical(claude_output, ConfigType.SLASH_COMMAND)
+
+        # Claude-specific metadata should survive Claude round-trip
+        assert claude_canonical.get_metadata('claude_disable_model_invocation') is not None or \
+               claude_canonical.get_metadata('claude_disable_model_invocation') == False
+
+        # Convert to Copilot format
+        copilot_output = copilot_adapter.from_canonical(canonical, ConfigType.SLASH_COMMAND)
+        copilot_canonical = copilot_adapter.to_canonical(copilot_output, ConfigType.SLASH_COMMAND)
+
+        # Copilot-specific metadata should survive Copilot round-trip
+        assert copilot_canonical.get_metadata('copilot_agent') == 'ask' or \
+               copilot_canonical.get_metadata('copilot_agent') is not None

@@ -177,3 +177,20 @@ class CanonicalSlashCommand:
     # Tracking
     source_format: Optional[str] = None
     version: str = "1.0"
+
+    def add_metadata(self, key: str, value: Any):
+        """
+        Store format-specific field that may not have equivalents in other formats.
+
+        Example: Copilot's 'agent' field doesn't exist in Claude, so we store
+        it in metadata to preserve it if we do a round-trip conversion.
+        """
+        self.metadata[key] = value
+
+    def get_metadata(self, key: str, default=None):
+        """Retrieve format-specific metadata with optional default."""
+        return self.metadata.get(key, default)
+
+    def has_metadata(self, key: str) -> bool:
+        """Check if metadata key exists."""
+        return key in self.metadata
