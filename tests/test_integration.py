@@ -1484,6 +1484,19 @@ class TestPermissionIntegration:
             }
         }
 
+    @pytest.fixture
+    def copilot_settings(self):
+        """Sample Copilot VS Code settings JSON content."""
+        return {
+            "chat.tools.terminal.autoApprove": {
+                "git diff": True,
+                "git status": False
+            },
+            "chat.tools.urls.autoApprove": {
+                "https://api.example.com/*": True
+            }
+        }
+
     def test_end_to_end_permission_sync_claude_to_copilot(
         self, registry, state_manager, claude_dir, copilot_dir, claude_settings
     ):
@@ -1509,9 +1522,21 @@ class TestPermissionIntegration:
         # Assert
         # Claude settings.json base name is 'settings'
         # Copilot adapter get_file_extension(PERMISSION) is '.perm.json'
+        import json
         copilot_file = copilot_dir / "settings.perm.json"
         assert copilot_file.exists(), "Copilot permission file should be created"
-        assert "not explicitly supported" in copilot_file.read_text()
+
+        # Verify the conversion produced valid VS Code settings with expected permissions
+        copilot_data = json.loads(copilot_file.read_text())
+        assert "chat.tools.terminal.autoApprove" in copilot_data, "Terminal permissions should be present"
+
+        terminal_perms = copilot_data["chat.tools.terminal.autoApprove"]
+        # "Bash(git diff:*)" from allow should be True
+        # "Bash(git push:*)" from ask should be False (ask maps to False in VS Code)
+        assert "git diff" in terminal_perms, "git diff should be in terminal permissions"
+        assert terminal_perms["git diff"] is True, "git diff should be approved (from allow)"
+        assert "git push" in terminal_perms, "git push should be in terminal permissions"
+        assert terminal_perms["git push"] is False, "git push should require approval (from ask rule)"
 
     def test_permission_state_persistence(
         self, registry, state_file, claude_dir, copilot_dir, claude_settings
@@ -1571,5 +1596,46 @@ class TestPermissionIntegration:
         # Assert
         assert (copilot_dir / "settings.perm.json").exists()
         assert orchestrator.stats['target_to_source'] == 0
-        
-        
+
+    def test_end_to_end_permission_sync_copilot_to_claude(
+        self, registry, state_manager, claude_dir, copilot_dir, copilot_settings
+    ):
+        """Test syncing permissions from Copilot VS Code settings to Claude."""
+        import json
+        # Arrange
+        copilot_file = copilot_dir / "settings.perm.json"
+        copilot_file.write_text(json.dumps(copilot_settings))
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=copilot_dir,
+            target_dir=claude_dir,
+            source_format='copilot',
+            target_format='claude',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        # Copilot perm.json base name is 'settings'
+        # Claude adapter get_file_extension(PERMISSION) is '.json'
+        claude_file = claude_dir / "settings.json"
+        assert claude_file.exists(), "Claude permission file should be created"
+
+        # Verify the conversion produced valid Claude settings with expected permissions
+        claude_data = json.loads(claude_file.read_text())
+        assert "permissions" in claude_data, "Permissions key should be present"
+
+        perms = claude_data["permissions"]
+        # Terminal permissions (git diff) should be in allow
+        assert "allow" in perms, "Allow list should be present"
+        # "git diff" with True should translate to "Bash(git diff:*)" in allow
+        bash_perms = [p for p in perms.get("allow", []) if p.startswith("Bash(")]
+        assert len(bash_perms) > 0, "Bash permissions should be present in allow"
+
+        # URL permissions should be in allow
+        assert "WebFetch" in perms.get("allow", []) or any("WebFetch" in p for p in perms.get("allow", [])), \
+            "WebFetch should be in allow (from URLs)"
