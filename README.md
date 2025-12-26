@@ -1,6 +1,6 @@
 # Agent Sync Tool
 
-Bidirectional synchronization tool for custom agents and settings between Claude Code and GitHub Copilot.
+Bidirectional synchronization tool for custom agents, permissions, and slash commands between Claude Code and GitHub Copilot.
 
 ## Features
 
@@ -121,6 +121,40 @@ python -m cli.main \
 
 See [Permission Conversion Details](#permission-conversion) below for more information.
 
+### Slash Command Sync
+
+Sync slash command/prompt configurations between formats:
+
+**Claude → Copilot:**
+```bash
+python -m cli.main \
+  --source-dir ~/.claude/commands \
+  --target-dir .github/prompts \
+  --source-format claude \
+  --target-format copilot \
+  --config-type slash-command
+```
+
+**Copilot → Claude:**
+```bash
+python -m cli.main \
+  --source-dir .github/prompts \
+  --target-dir ~/.claude/commands \
+  --source-format copilot \
+  --target-format claude \
+  --config-type slash-command
+```
+
+**Bidirectional sync:**
+```bash
+python -m cli.main \
+  --source-dir ~/.claude/commands \
+  --target-dir .github/prompts \
+  --source-format claude \
+  --target-format copilot \
+  --config-type slash-command
+```
+
 ### One-Time Migration
 
 **Claude → Copilot:**
@@ -179,7 +213,7 @@ python -m cli.main \
 | `--target-dir` | Yes | - | Path to target directory |
 | `--source-format` | Yes | - | Source format name (`claude` or `copilot`) |
 | `--target-format` | Yes | - | Target format name (`claude` or `copilot`) |
-| `--config-type` | No | `agent` | Type of configuration to sync: `agent` or `permission` |
+| `--config-type` | No | `agent` | Type of configuration to sync: `agent`, `permission`, or `slash-command` |
 | `--direction` | No | `both` | Sync direction: `source-to-target`, `target-to-source`, or `both` |
 | `--dry-run` | No | `false` | Show changes without applying them |
 | `--force` | No | `false` | Auto-resolve conflicts using newest file |
@@ -196,6 +230,7 @@ python -m cli.main \
 Files are matched by base name:
 - Agents: `planner.md` (Claude) ↔ `planner.agent.md` (Copilot)
 - Permissions: `settings.json` (Claude) ↔ `settings.perm.json` (Copilot)
+- Slash Commands: `command.md` (Claude) ↔ `command.prompt.md` (Copilot)
 
 ### Sync Logic
 

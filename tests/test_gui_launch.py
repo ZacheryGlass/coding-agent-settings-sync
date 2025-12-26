@@ -3,6 +3,15 @@ from unittest.mock import patch, MagicMock
 import pytest
 from cli.main import main
 
+# Skip these tests if nicegui is not installed (GUI is optional)
+try:
+    import nicegui
+    GUI_AVAILABLE = True
+except ImportError:
+    GUI_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(not GUI_AVAILABLE, reason="nicegui not installed (optional dependency)")
+
 def test_gui_launch_with_flag():
     with patch('gui.main.start') as mock_start:
         with patch('sys.argv', ['cli.main', '--gui']):

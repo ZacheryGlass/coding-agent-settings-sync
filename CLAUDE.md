@@ -42,6 +42,15 @@ python -m cli.main \
 python -m cli.main \
   --convert-file my-agent.md \
   --target-format copilot
+
+# Sync slash commands between formats
+python -m cli.main \
+  --source-dir ~/.claude/commands \
+  --target-dir .github/prompts \
+  --source-format claude \
+  --target-format copilot \
+  --config-type slash-command \
+  --dry-run
 ```
 
 ### Testing
@@ -138,6 +147,91 @@ Each adapter handles:
 - Tool format conversion
 - Preserving unique fields in metadata
 
+## Config Type Details
+
+### Agents
+Custom AI assistants with specialized instructions, tool access, and model preferences.
+
+**File patterns:**
+- Claude: `agent-name.md` (in `~/.claude/agents/`)
+- Copilot: `agent-name.agent.md` (in `.github/agents/`)
+
+### Permissions
+Tool and URL access control configurations.
+
+**File patterns:**
+- Claude: `settings.json` (in `~/.claude/`)
+- Copilot: `settings.perm.json` (in `.github/`)
+
+### Slash Commands
+Reusable prompt templates invoked via special syntax. Slash commands allow users to define custom workflows with variable substitution and tool restrictions.
+
+**File patterns:**
+- Claude: `command-name.md` (in `~/.claude/commands/`)
+- Copilot: `command-name.prompt.md` (in `.github/prompts/`)
+
+**Field Mapping:**
+
+| Field | Claude | Copilot | Conversion Notes |
+|-------|--------|---------|------------------|
+| `name` | Optional (from filename) | Required in frontmatter | Auto-derived from filename if missing |
+| `description` | Optional | Optional | Direct mapping |
+| `instructions` | Markdown body | Markdown body | Direct mapping |
+| `argument-hint` | Optional | Optional | Direct mapping |
+| `model` | Optional | Optional | No model name mapping (passed through) |
+| `allowed-tools` | Comma-separated string | YAML list | Format conversion |
+| `disable-model-invocation` | Claude-specific | - | Preserved in metadata |
+| `agent` | - | Copilot-specific | Preserved in metadata |
+
+**Variable Syntax Differences:**
+
+Claude and Copilot use different variable syntaxes (not automatically converted):
+- Claude: `$ARGUMENTS`, `!backtick commands` (e.g., `!git status`)
+- Copilot: `${selection}`, `${file}`, `${input:name:prompt}`, `#tool:name`
+
+**Conversion Examples:**
+
+*Claude slash command:*
+```markdown
+---
+description: Create a git commit
+allowed-tools: Bash(git add:*), Bash(git status:*)
+argument-hint: [message]
+model: claude-3-5-haiku-20241022
+---
+
+Create a git commit: $ARGUMENTS
+
+Follow conventional commit format.
+```
+
+*Converts to Copilot:*
+```markdown
+---
+name: commit
+description: Create a git commit
+tools:
+  - Bash(git add:*)
+  - Bash(git status:*)
+argument-hint: [message]
+model: claude-3-5-haiku-20241022
+---
+
+Create a git commit: $ARGUMENTS
+
+Follow conventional commit format.
+```
+
+**Metadata Preservation:**
+- `claude_disable_model_invocation`: Preserved for round-trip Claude → Copilot → Claude
+- `copilot_agent`: Preserved for round-trip Copilot → Claude → Copilot
+
+**Conversion Limitations:**
+- Variable syntax not automatically converted (must manually adjust `$ARGUMENTS` vs `${selection}`)
+- File reference syntax differs (`!backtick` vs `#tool:`)
+- No model name mapping (passed through as-is)
+- Format-specific features preserved in metadata but not actively used
+
 ## Dependencies
 
 - Python 3.x
@@ -183,18 +277,21 @@ agent-sync/
 ### Configuration Locations
 - User sync state: `~/.agent_sync_state.json` (auto-created)
 - Claude agents: `~/.claude/agents/` or `.claude/agents/`
+- Claude slash commands: `~/.claude/commands/` or `.claude/commands/`
 - Copilot agents: `.github/agents/`
+- Copilot prompts: `.github/prompts/`
 
 ## Development Status
 
 **Functional:**
-- Core canonical models
-- Claude and Copilot adapters (agents and permissions)
+- Core canonical models (agents, permissions, slash commands)
+- Claude and Copilot adapters (agents, permissions, slash commands)
 - Format registry
 - State manager
 - CLI interface (directory sync and single-file conversion)
 - Universal orchestrator
 - Bidirectional permission conversion (Copilot ↔ Claude)
+- Bidirectional slash-command conversion (Copilot ↔ Claude)
 
 **In Development:**
 - Additional format adapters
@@ -213,7 +310,8 @@ agent-sync/
 
 3. Implement handlers in `adapters/newformat/handlers/`:
    - `agent_handler.py`: Implement `to_canonical()` and `from_canonical()` for agents
-   - Add more handlers for permissions, slash commands, etc. as needed
+   - `permission_handler.py`: Implement permission conversion logic
+   - `slash_command_handler.py`: Implement slash command conversion logic
    - Use shared utilities from `adapters/shared/` where applicable
 
 4. Register in application:
