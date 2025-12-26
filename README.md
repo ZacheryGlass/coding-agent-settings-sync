@@ -399,10 +399,13 @@ PYTHONPATH=/workspaces/coding-agent-settings-sync python examples/permission_con
 
 ### Conversion Warnings
 
-The tool tracks and reports conversion warnings. Examples of warnings:
-- Lossy conversions (Claude `deny` → VS Code `false`)
-- Unsupported features (split URL approvals)
-- Pattern transformations
+**Note**: Conversion warning display and `--strict` mode are planned for v2.0.0 (see [issue #69](https://github.com/ZacheryGlass/agent-sync/issues/69)).
+
+Currently, lossy conversions happen silently:
+- Claude `deny` → VS Code `false` (require approval instead of blocking)
+- VS Code split URL approvals → Claude `ask` (stored in metadata)
+
+Warnings are tracked in the canonical model metadata but not displayed during sync operations.
 
 ## Troubleshooting
 

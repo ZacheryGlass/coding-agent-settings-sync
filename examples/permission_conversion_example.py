@@ -4,14 +4,13 @@ Example: Converting permissions between VS Code (Copilot) and Claude formats.
 This example demonstrates:
 1. Converting VS Code permission settings to Claude format
 2. Converting Claude permissions to VS Code format
-3. Using the conversion report system to track warnings
-4. Handling lossy conversions (e.g., Claude deny -> VS Code false)
+3. Handling lossy conversions (e.g., Claude deny -> VS Code false)
+4. Round-trip conversion fidelity
 """
 
 from pathlib import Path
 from adapters.copilot import CopilotAdapter
 from adapters.claude import ClaudeAdapter
-from core.conversion_report import ConversionReport, WarningLevel
 from core.canonical_models import CanonicalPermission, ConfigType
 
 
@@ -95,15 +94,13 @@ def example_claude_to_vscode():
     print("VS Code doesn't have a true 'deny' concept, so this is a lossy conversion.")
 
 
-def example_with_conversion_report():
-    """Demonstrate tracking conversion warnings."""
+def example_lossy_conversion_warning():
+    """Demonstrate lossy conversion handling."""
     print("\n" + "=" * 70)
-    print("EXAMPLE 3: Conversion with Warning Report")
+    print("EXAMPLE 3: Lossy Conversion (Claude deny → VS Code false)")
     print("=" * 70)
 
-    report = ConversionReport()
-
-    # Create permissions with potential issues
+    # Create permissions with deny rules (will be lossy when converting to VS Code)
     canonical = CanonicalPermission(
         allow=["Bash(/^git (status|diff)$/)"],
         ask=["Bash(npm install:*)"],
@@ -115,20 +112,21 @@ def example_with_conversion_report():
         source_format="claude"
     )
 
-    print("\nConverting Claude → VS Code with 3 deny rules (lossy):")
+    print("\nConverting Claude → VS Code with 3 deny rules (lossy conversion):")
     print(f"  Deny rules: {canonical.deny}")
 
-    # Track lossy conversions
-    for deny_rule in canonical.deny:
-        report.add_lossy_conversion(
-            rule=deny_rule,
-            from_category="deny",
-            to_category="ask",
-            reason="VS Code doesn't support blocking commands/URLs entirely"
-        )
+    # Convert to VS Code
+    copilot_adapter = CopilotAdapter()
+    vscode_settings = copilot_adapter.from_canonical(canonical, ConfigType.PERMISSION)
 
-    # Generate report
-    print("\n" + report.generate_report(verbose=False))
+    print("\nConverted to VS Code:")
+    print(vscode_settings)
+
+    print("\nWARNING: Lossy conversion detected!")
+    print("  - Claude 'deny' rules were mapped to VS Code 'false' (require approval)")
+    print("  - VS Code doesn't support blocking commands/URLs entirely")
+    print("  - The deny rules became 'ask for approval' instead of 'block completely'")
+    print("\nNOTE: In v2.0.0, use --strict flag to error on lossy conversions (see issue #69)")
 
 
 def example_round_trip():
@@ -211,7 +209,7 @@ if __name__ == "__main__":
 
     example_vscode_to_claude()
     example_claude_to_vscode()
-    example_with_conversion_report()
+    example_lossy_conversion_warning()
     example_round_trip()
     example_complex_url_permissions()
 
