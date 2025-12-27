@@ -376,8 +376,12 @@ class UniversalSyncOrchestrator:
             Resolved action or None to skip
         """
         if self.force:
+            # Handle None mtimes (treat as 0/oldest)
+            source_mtime = pair.source_mtime or 0
+            target_mtime = pair.target_mtime or 0
+
             # Use newest file
-            if pair.source_mtime > pair.target_mtime:
+            if source_mtime > target_mtime:
                 self.log(f"  Conflict resolved (--force): Using source (newer)")
                 return 'source_to_target'
             else:
