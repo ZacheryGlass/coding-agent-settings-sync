@@ -512,8 +512,11 @@ class UniversalSyncOrchestrator:
                 self.stats['target_to_source'] += 1
 
             elif action == 'delete_target':
-                if not self.dry_run and pair.target_path and pair.target_path.exists():
-                    pair.target_path.unlink()
+                if not self.dry_run and pair.target_path:
+                    try:
+                        pair.target_path.unlink()
+                    except FileNotFoundError:
+                        pass  # Already deleted, no action needed
                 if not self.dry_run:
                     self.state_manager.remove_file_state(
                         self.source_dir, self.target_dir, pair.base_name
@@ -521,8 +524,11 @@ class UniversalSyncOrchestrator:
                 self.stats['deletions'] += 1
 
             elif action == 'delete_source':
-                if not self.dry_run and pair.source_path and pair.source_path.exists():
-                    pair.source_path.unlink()
+                if not self.dry_run and pair.source_path:
+                    try:
+                        pair.source_path.unlink()
+                    except FileNotFoundError:
+                        pass  # Already deleted, no action needed
                 if not self.dry_run:
                     self.state_manager.remove_file_state(
                         self.source_dir, self.target_dir, pair.base_name
