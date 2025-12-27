@@ -2,8 +2,7 @@
 
 ## Structure
 
-- **users/**: End-user documentation
-  - `user-guide.md`: Installation, usage, examples
+- **Main Documentation**: [README.md](../../README.md) - Installation, usage, and configuration.
 
 - **developers/**: Developer documentation
   - `architecture.md`: System design and core concepts
@@ -14,7 +13,7 @@
 ## Quick Links
 
 ### For Users
-- [User Guide](users/user-guide.md)
+- [Project Readme](../../README.md)
 
 ### For Developers
 - [Architecture Overview](developers/architecture.md)
