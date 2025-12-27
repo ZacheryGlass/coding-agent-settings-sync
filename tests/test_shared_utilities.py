@@ -7,6 +7,16 @@ from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_front
 class TestYAMLFrontmatter:
     """Test YAML frontmatter parsing and building utilities."""
 
+    def test_parse_empty_frontmatter(self):
+        """Test parsing content with empty frontmatter (returns None from yaml.safe_load)."""
+        content = """---
+
+---
+Body"""
+        fm, body = parse_yaml_frontmatter(content)
+        assert fm == {}
+        assert body == "Body"
+
     def test_parse_valid_frontmatter(self):
         """Test parsing content with valid YAML frontmatter."""
         content = """---

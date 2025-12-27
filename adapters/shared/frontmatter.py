@@ -53,7 +53,7 @@ def parse_yaml_frontmatter(content: str) -> Tuple[dict, str]:
 
     yaml_content, body = match.groups()
     try:
-        frontmatter = yaml.safe_load(yaml_content)
+        frontmatter = yaml.safe_load(yaml_content) or {}
     except yaml.YAMLError:
         # Fallback to loose parsing for malformed YAML
         # (e.g. unquoted multiline strings without indentation)
