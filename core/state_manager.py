@@ -189,7 +189,7 @@ class SyncStateManager:
         if config_type:
             pair_state["config_type"] = config_type
 
-        pair_state["files"][file_name] = {
+        pair_state["files"][file_name.lower()] = {
             "source_mtime": source_mtime,
             "target_mtime": target_mtime,
             "last_action": action,
@@ -213,7 +213,7 @@ class SyncStateManager:
             File state dict or None if no previous sync
         """
         pair_state = self.get_pair_state(source_dir, target_dir)
-        return pair_state["files"].get(file_name)
+        return pair_state["files"].get(file_name.lower())
 
     def remove_file_state(self,
                          source_dir: Path,
@@ -228,8 +228,8 @@ class SyncStateManager:
             file_name: Base name of file to remove
         """
         pair_state = self.get_pair_state(source_dir, target_dir)
-        if file_name in pair_state["files"]:
-            del pair_state["files"][file_name]
+        if file_name.lower() in pair_state["files"]:
+            del pair_state["files"][file_name.lower()]
 
     def clear_pair_state(self, source_dir: Path, target_dir: Path):
         """
