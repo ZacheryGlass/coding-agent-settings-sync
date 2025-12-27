@@ -80,6 +80,9 @@ class FormatRegistry:
         Iterates through registered adapters and returns the first one
         whose can_handle() method returns True.
 
+        Registration order matters - the first matching adapter is returned.
+        If multiple adapters could handle the file, a warning is issued.
+
         Args:
             file_path: Path to file to detect format for
 
@@ -90,10 +93,25 @@ class FormatRegistry:
             adapter = registry.detect_format(Path('~/.claude/agents/planner.md'))
             # Returns ClaudeAdapter instance
         """
+        import warnings
+        
+        matches = []
         for adapter in self._adapters.values():
             if adapter.can_handle(file_path):
-                return adapter
-        return None
+                matches.append(adapter)
+        
+        if not matches:
+            return None
+            
+        if len(matches) > 1:
+            adapter_names = [a.format_name for a in matches]
+            warnings.warn(
+                f"Multiple adapters match file '{file_path}': {adapter_names}. "
+                f"Using the first match: '{matches[0].format_name}'.",
+                RuntimeWarning
+            )
+            
+        return matches[0]
 
     def list_formats(self) -> List[str]:
         """
