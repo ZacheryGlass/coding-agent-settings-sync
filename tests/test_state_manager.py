@@ -178,8 +178,8 @@ class TestSyncStateManager:
         assert "|" in key
         parts = key.split("|")
         assert len(parts) == 2
-        assert str(source_dir.resolve()) == parts[0]
-        assert str(target_dir.resolve()) == parts[1]
+        assert Path(parts[0]) == source_dir.resolve()
+        assert Path(parts[1]) == target_dir.resolve()
 
     def test_get_pair_key_resolves_paths(self, state_manager, tmp_path):
         """Test relative paths are resolved to absolute."""
