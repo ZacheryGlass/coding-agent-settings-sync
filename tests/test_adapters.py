@@ -486,8 +486,8 @@ Follow these guidelines:
 
         # Name should be derived from filename
         assert slash_command.name == "minimal"
-        # Description should be empty or have a default value
-        assert slash_command.description == "" or slash_command.description is None
+        # Description should be present (updated fixture)
+        assert slash_command.description == "Minimal command"
         # Instructions should be the body content
         assert "Review this code for bugs and suggest improvements" in slash_command.instructions
         # Optional fields should be None or empty
@@ -541,6 +541,7 @@ Follow these guidelines:
         """Test that format-specific fields are preserved in metadata."""
         # Note: This test will fail until ClaudeSlashCommandHandler is implemented
         content = """---
+name: metadata-test
 description: Test command
 allowed-tools: Read, Grep
 disable-model-invocation: true
@@ -638,6 +639,7 @@ Test instructions.
 
         # Test complex allowed-tools patterns
         content_with_complex_tools = """---
+name: complex-tools
 description: Complex tools test
 allowed-tools: Bash(git:*), Read, Write, Grep, Bash(npm *:*)
 ---
@@ -663,13 +665,15 @@ Test with complex tools.
 
         # Test empty description
         content_no_desc = """---
+name: no-desc
 argument-hint: test
 ---
 
 No description here.
 """
-        slash_command = adapter.to_canonical(content_no_desc, ConfigType.SLASH_COMMAND)
-        assert slash_command.description == "" or slash_command.description is None
+        # Should raise ValueError because description is required
+        with pytest.raises(ValueError, match="description"):
+             adapter.to_canonical(content_no_desc, ConfigType.SLASH_COMMAND)
 
     # Phase 6: Error Handling
 
@@ -1112,6 +1116,7 @@ Test instructions with ${selection} and #tool:githubRepo.
 
         # Test variable substitution syntax
         content_with_vars = """---
+name: vars-test
 description: Variable substitution test
 ---
 
@@ -1131,6 +1136,7 @@ Use ${selection} and ${file} and ${input:param:placeholder}.
         # Test agent field variations
         for agent_type in ['ask', 'edit', 'agent', 'custom-agent']:
             content = f"""---
+name: agent-{agent_type}
 description: Agent type {agent_type}
 agent: '{agent_type}'
 ---
@@ -1144,6 +1150,7 @@ Test with agent type.
 
         # Test tool references (#tool:name syntax)
         content_with_tool_refs = """---
+name: tool-refs
 description: Tool references test
 ---
 
@@ -1154,6 +1161,7 @@ Use #tool:githubRepo to search. Check #tool:search/codebase for patterns.
 
         # Test empty/missing optional fields
         content_minimal = """---
+name: minimal-test
 description: Test
 ---
 
@@ -1377,6 +1385,7 @@ Cross-format test instructions.
         # Note: This test will fail until both handlers are implemented
         # Sample Claude slash command
         claude_content = """---
+name: claude-command
 description: Create a commit
 argument-hint: "[message]"
 allowed-tools: Bash(git:*), Read, Write
@@ -1454,6 +1463,7 @@ Use #tool:githubRepo to find similar implementations.
         # Note: This test will fail until both handlers are implemented
         # Create a Copilot prompt
         copilot_content = """---
+name: copilot-review
 description: Review code
 argument-hint: code to review
 agent: ask

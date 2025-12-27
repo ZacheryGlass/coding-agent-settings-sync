@@ -1383,8 +1383,8 @@ Target instructions.
 name: source-only
 description: From source
 ---
+Instructions from source.
 """)
-
         # Create target-only file
         (target_dir / "target-only.agent.md").write_text("""---
 name: target-only
