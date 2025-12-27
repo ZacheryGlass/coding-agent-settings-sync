@@ -1,8 +1,10 @@
 # Agent Sync
 
-A bidirectional synchronization tool for custom agents, permissions, and slash commands between **Claude Code** and **GitHub Copilot**.
+A universal synchronization tool for custom agents, permissions, and slash commands (saved prompts) between **Claude Code** and **GitHub Copilot**.
 
-Manage your AI assistant configurations in one place and sync them across your development tools automatically.
+**Support for Codex and Gemini CLI coming soon!**
+
+Manage your configuration in your preferred tool's native settings files, and automatically sync and convert those changes to all your other supported AI coding agents.
 
 ## Features
 
@@ -42,17 +44,7 @@ python -m cli.main
 
 ## Usage
 
-Agent Sync can be run as a Graphical User Interface (GUI) or a Command Line Interface (CLI).
-
-### GUI Mode
-
-Launch the application with a user-friendly interface:
-
-```bash
-agent-sync --gui
-```
-
-If no arguments are provided, the GUI launches by default.
+Agent Sync is a Command Line Interface (CLI) tool.
 
 ### CLI Mode
 
