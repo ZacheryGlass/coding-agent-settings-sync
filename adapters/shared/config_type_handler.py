@@ -7,7 +7,8 @@ Handlers encapsulate the logic for converting a specific config type
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
-from core.canonical_models import ConfigType
+from pathlib import Path
+from core.canonical_models import ConfigType, CanonicalConfig
 
 
 class ConfigTypeHandler(ABC):
@@ -27,11 +28,11 @@ class ConfigTypeHandler(ABC):
             def config_type(self) -> ConfigType:
                 return ConfigType.AGENT
 
-            def to_canonical(self, content: str) -> CanonicalAgent:
+            def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalAgent:
                 # Parse Claude agent format
                 ...
 
-            def from_canonical(self, canonical_obj: Any, options=None) -> str:
+            def from_canonical(self, canonical_obj: CanonicalAgent, options=None) -> str:
                 # Generate Claude agent format
                 ...
     """
@@ -48,12 +49,14 @@ class ConfigTypeHandler(ABC):
         pass
 
     @abstractmethod
-    def to_canonical(self, content: str) -> Any:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalConfig:
         """
         Convert format-specific content to canonical representation.
 
         Args:
             content: Raw content string from file
+            file_path: Optional path to the source file (useful for extracting
+                      metadata like filename-based command names)
 
         Returns:
             Canonical object (CanonicalAgent, CanonicalPermission, etc.)
@@ -64,7 +67,7 @@ class ConfigTypeHandler(ABC):
         pass
 
     @abstractmethod
-    def from_canonical(self, canonical_obj: Any,
+    def from_canonical(self, canonical_obj: CanonicalConfig,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """
         Convert canonical representation to format-specific content.

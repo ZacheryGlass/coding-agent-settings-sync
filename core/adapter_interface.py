@@ -19,7 +19,7 @@ Benefits:
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional, Any, Dict
-from .canonical_models import ConfigType
+from .canonical_models import ConfigType, CanonicalConfig
 
 
 class FormatAdapter(ABC):
@@ -58,13 +58,14 @@ class FormatAdapter(ABC):
         """
         pass
 
+    @abstractmethod
     def get_file_extension(self, config_type: ConfigType) -> str:
         """
         Get file extension for a specific config type.
 
-        Defaults to the main file_extension property if not overridden.
+        Must be implemented by subclasses to return the correct extension for each config type.
         """
-        return self.file_extension
+        pass
 
     @property
     @abstractmethod
@@ -103,7 +104,7 @@ class FormatAdapter(ABC):
         pass
 
     @abstractmethod
-    def read(self, file_path: Path, config_type: ConfigType) -> Any:
+    def read(self, file_path: Path, config_type: ConfigType) -> CanonicalConfig:
         """
         Read a file and convert to canonical format.
 
@@ -117,11 +118,12 @@ class FormatAdapter(ABC):
         Raises:
             ValueError: If file format is invalid
             FileNotFoundError: If file doesn't exist
+            IOError: If file cannot be read
         """
         pass
 
     @abstractmethod
-    def write(self, canonical_obj: Any, file_path: Path, config_type: ConfigType,
+    def write(self, canonical_obj: CanonicalConfig, file_path: Path, config_type: ConfigType,
               options: Optional[Dict[str, Any]] = None):
         """
         Write canonical format to file in this format.
@@ -139,7 +141,8 @@ class FormatAdapter(ABC):
         pass
 
     @abstractmethod
-    def to_canonical(self, content: str, config_type: ConfigType) -> Any:
+    def to_canonical(self, content: str, config_type: ConfigType,
+                     file_path: Optional[Path] = None) -> CanonicalConfig:
         """
         Convert raw content string to canonical representation.
 
@@ -149,12 +152,14 @@ class FormatAdapter(ABC):
         Args:
             content: Raw file content as string
             config_type: What type of config this is
+            file_path: Optional path to the source file (useful for extracting
+                      metadata like filename-based command names)
 
         Returns:
             CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
 
         Example:
-            def to_canonical(self, content: str, config_type: ConfigType) -> CanonicalAgent:
+            def to_canonical(self, content: str, config_type: ConfigType, file_path=None) -> CanonicalAgent:
                 frontmatter, body = self._parse_yaml_frontmatter(content)
                 return CanonicalAgent(
                     name=frontmatter['name'],
@@ -168,7 +173,7 @@ class FormatAdapter(ABC):
         pass
 
     @abstractmethod
-    def from_canonical(self, canonical_obj: Any, config_type: ConfigType,
+    def from_canonical(self, canonical_obj: CanonicalConfig, config_type: ConfigType,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """
         Convert canonical representation to this format's string.
@@ -193,11 +198,11 @@ class FormatAdapter(ABC):
                     'model': self._denormalize_model(agent.model)
                 }
                 yaml_str = yaml.dump(frontmatter)
-                return f"---\\n{yaml_str}---\\n{agent.instructions}\\n"
+                return f"---\n{yaml_str}---\n{agent.instructions}\n"
         """
         pass
 
-    def get_conversion_warnings(self) -> List[str]:
+    def get_warnings(self) -> List[str]:
         """
         Return warnings about data loss or unsupported features.
 
