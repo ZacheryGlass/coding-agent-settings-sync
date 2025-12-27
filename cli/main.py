@@ -135,12 +135,6 @@ Examples:
     )
 
     parser.add_argument(
-        '--in-place',
-        action='store_true',
-        help='Enable in-place merge mode (merge changes instead of replacing)'
-    )
-
-    parser.add_argument(
         '--bidirectional',
         action='store_true',
         help='Sync changes in both directions (source to target and target to source)'
@@ -484,7 +478,7 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run,
                 force=args.force,
                 verbose=args.verbose,
-                conversion_options=conversion_options if conversion_options else None
+                conversion_options=conversion_options or None
             )
 
             # Run in-place sync
@@ -498,8 +492,7 @@ def main(argv: Optional[list] = None):
             return EXIT_SUCCESS
 
         except KeyboardInterrupt:
-            print("
-Sync cancelled by user", file=sys.stderr)
+            print("\nSync cancelled by user", file=sys.stderr)
             return EXIT_ERROR
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)

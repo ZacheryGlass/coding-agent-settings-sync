@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 
-from .canonical_models import ConfigType
+from .canonical_models import ConfigType, CanonicalAgent, CanonicalPermission, CanonicalSlashCommand
 from .registry import FormatRegistry
 from .state_manager import SyncStateManager
 
@@ -622,7 +622,7 @@ class UniversalSyncOrchestrator:
         # Path.stem handles .hidden files by returning the full name
         return file_path.stem
 
-    def sync_files_in_place(self, source_path, target_path, bidirectional=False, dry_run=False):
+    def sync_files_in_place(self, source_path: Path, target_path: Path, bidirectional: bool = False, dry_run: bool = False) -> None:
         """Sync two live config files in-place with intelligent merging.
 
         This method enables true bidirectional sync where changes from source are merged
@@ -671,7 +671,7 @@ class UniversalSyncOrchestrator:
             # 4. Convert merged result back to target format
             merged_content = self.target_adapter.from_canonical(
                 merged_canonical, self.config_type,
-                self.conversion_options if self.conversion_options else None
+                self.conversion_options
             )
 
             # 5. Write target (unless dry run)
@@ -700,7 +700,7 @@ class UniversalSyncOrchestrator:
                 # Convert back to source format
                 source_merged_content = self.source_adapter.from_canonical(
                     source_merged_canonical, self.config_type,
-                    self.conversion_options if self.conversion_options else None
+                    self.conversion_options
                 )
 
                 # Write source (unless dry run)
