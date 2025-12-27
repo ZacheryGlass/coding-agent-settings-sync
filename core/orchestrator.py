@@ -325,8 +325,10 @@ class UniversalSyncOrchestrator:
             last_source_mtime = file_state.get('source_mtime')
             last_target_mtime = file_state.get('target_mtime')
 
-            source_changed = last_source_mtime is None or pair.source_mtime > last_source_mtime
-            target_changed = last_target_mtime is None or pair.target_mtime > last_target_mtime
+            # Use epsilon for float comparison to avoid precision issues
+            epsilon = 0.01
+            source_changed = last_source_mtime is None or pair.source_mtime > (last_source_mtime + epsilon)
+            target_changed = last_target_mtime is None or pair.target_mtime > (last_target_mtime + epsilon)
 
             if source_changed and target_changed:
                 return 'conflict'
@@ -448,7 +450,8 @@ class UniversalSyncOrchestrator:
                 if not self.dry_run:
                     self.state_manager.update_file_state(
                         self.source_dir, self.target_dir, pair.base_name,
-                        pair.source_mtime, target_mtime, 'source_to_target'
+                        pair.source_mtime, target_mtime, 'source_to_target',
+                        self.source_format, self.target_format, self.config_type.value
                     )
 
                 self.stats['source_to_target'] += 1
@@ -502,7 +505,8 @@ class UniversalSyncOrchestrator:
                 if not self.dry_run:
                     self.state_manager.update_file_state(
                         self.source_dir, self.target_dir, pair.base_name,
-                        source_mtime, pair.target_mtime, 'target_to_source'
+                        source_mtime, pair.target_mtime, 'target_to_source',
+                        self.source_format, self.target_format, self.config_type.value
                     )
 
                 self.stats['target_to_source'] += 1
