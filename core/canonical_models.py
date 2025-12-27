@@ -15,7 +15,7 @@ Each config type (agents, permissions, prompts) gets its own canonical model.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from enum import Enum
 
 
@@ -184,3 +184,6 @@ class CanonicalSlashCommand(MetadataMixin):
         if self.allowed_tools is None:
              self.allowed_tools = []
 
+
+# Type alias for all canonical models
+CanonicalConfig = Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]
