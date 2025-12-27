@@ -60,7 +60,8 @@ class ClaudeAdapter(FormatAdapter):
             return True
 
         # Check if file is a slash command (.md file in .claude/commands/)
-        if '.claude/commands' in str(file_path) or '.claude\\commands' in str(file_path):
+        path_parts = file_path.parts
+        if '.claude' in path_parts and 'commands' in path_parts:
             return file_path.suffix == '.md'
 
         # Otherwise, check if it's a regular agent file
