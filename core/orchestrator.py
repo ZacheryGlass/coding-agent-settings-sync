@@ -419,7 +419,11 @@ class UniversalSyncOrchestrator:
 
                 # Write to target (unless dry run)
                 if not self.dry_run:
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        raise IOError(f"Failed to create directory {target_path.parent}: {e}")
+
                     self.target_adapter.write(canonical, target_path, self.config_type,
                                               self.conversion_options)
                     
@@ -428,13 +432,17 @@ class UniversalSyncOrchestrator:
 
                     target_mtime = target_path.stat().st_mtime
                 else:
-                    target_mtime = pair.target_mtime
+                    # In dry-run, use existing mtime or current time for new files
+                    target_mtime = pair.target_mtime or datetime.now().timestamp()
 
                 # Log conversion warnings
                 for warning in self.source_adapter.get_conversion_warnings():
                     self.log(f"  Warning: {warning}")
+                self.source_adapter.clear_conversion_warnings()
+
                 for warning in self.target_adapter.get_conversion_warnings():
                     self.log(f"  Warning: {warning}")
+                self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
                 if not self.dry_run:
@@ -465,7 +473,11 @@ class UniversalSyncOrchestrator:
 
                 # Write to source (unless dry run)
                 if not self.dry_run:
-                    source_path.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        source_path.parent.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        raise IOError(f"Failed to create directory {source_path.parent}: {e}")
+
                     self.source_adapter.write(canonical, source_path, self.config_type,
                                               self.conversion_options)
                     
@@ -474,13 +486,17 @@ class UniversalSyncOrchestrator:
 
                     source_mtime = source_path.stat().st_mtime
                 else:
-                    source_mtime = pair.source_mtime
+                    # In dry-run, use existing mtime or current time for new files
+                    source_mtime = pair.source_mtime or datetime.now().timestamp()
 
                 # Log conversion warnings
                 for warning in self.target_adapter.get_conversion_warnings():
                     self.log(f"  Warning: {warning}")
+                self.target_adapter.clear_conversion_warnings()
+
                 for warning in self.source_adapter.get_conversion_warnings():
                     self.log(f"  Warning: {warning}")
+                self.source_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
                 if not self.dry_run:
@@ -509,8 +525,14 @@ class UniversalSyncOrchestrator:
                     )
                 self.stats['deletions'] += 1
 
-        except Exception as e:
+        except (IOError, ValueError, RuntimeError) as e:
             self.logger(f"  Error syncing {pair.base_name}: {e}")
+            self.stats['errors'] += 1
+        except Exception as e:
+            # Re-raise system exceptions
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.logger(f"  Unexpected error syncing {pair.base_name}: {e}")
             self.stats['errors'] += 1
 
     def log(self, message: str):
