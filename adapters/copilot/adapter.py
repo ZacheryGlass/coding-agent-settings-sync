@@ -58,8 +58,13 @@ class CopilotAdapter(FormatAdapter):
 
     def read(self, file_path: Path, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
         """Read file and convert to canonical."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except PermissionError:
+            raise ValueError(f"Permission denied: {file_path}")
+        except FileNotFoundError:
+            raise ValueError(f"File not found: {file_path}")
         return self.to_canonical(content, config_type)
 
     def write(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand],
@@ -67,8 +72,13 @@ class CopilotAdapter(FormatAdapter):
               config_type: ConfigType, options: dict = None):
         """Write canonical to file in Copilot format."""
         content = self.from_canonical(canonical_obj, config_type, options)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except PermissionError:
+            raise ValueError(f"Permission denied: {file_path}")
+        except FileNotFoundError:
+            raise ValueError(f"File not found: {file_path}")
 
     def to_canonical(self, content: str, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
         """Convert Copilot format to canonical (delegates to handler)."""

@@ -283,8 +283,15 @@ def convert_single_file(args) -> int:
 
         # Write output
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(output_content)
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(output_content)
+        except PermissionError:
+            print(f"Error: Permission denied writing to {output_file}", file=sys.stderr)
+            return 1
+        except FileNotFoundError:
+            print(f"Error: Could not find directory for {output_file}", file=sys.stderr)
+            return 1
 
         if args.verbose:
             print(f"Successfully converted to {output_file}")
