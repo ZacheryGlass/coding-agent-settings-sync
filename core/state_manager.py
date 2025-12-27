@@ -59,7 +59,12 @@ class SyncStateManager:
         Args:
             state_file: Path to state file (defaults to ~/.agent_sync_state.json)
         """
-        self.state_file = state_file or Path.home() / ".agent_sync_state.json"
+        try:
+            self.state_file = state_file or Path.home() / ".agent_sync_state.json"
+        except (RuntimeError, OSError):
+            # Fallback to current directory if home is not accessible
+            self.state_file = state_file or Path.cwd() / ".agent_sync_state.json"
+        
         self.state = self._load_state()
 
     def _load_state(self) -> Dict:
@@ -70,7 +75,7 @@ class SyncStateManager:
             State dictionary or empty structure if file doesn't exist
         """
         default_state = {"version": 1, "sync_pairs": {}}
-        
+
         if self.state_file.exists():
             try:
                 with open(self.state_file, 'r', encoding='utf-8') as f:
@@ -87,7 +92,7 @@ class SyncStateManager:
     def save(self):
         """
         Save current state to file.
-        
+
         Uses atomic write (write to temp file then rename) to prevent corruption.
         Sets secure permissions (600) on the file.
         """
@@ -97,17 +102,17 @@ class SyncStateManager:
             directory = self.state_file.parent
             if not directory.exists():
                 directory.mkdir(parents=True, exist_ok=True)
-                
+
             with tempfile.NamedTemporaryFile('w', dir=directory, delete=False, encoding='utf-8') as tf:
                 json.dump(self.state, tf, indent=2)
                 temp_path = Path(tf.name)
-            
+
             # Set permissions to read/write for owner only
             os.chmod(temp_path, 0o600)
-            
+
             # Atomic rename
             temp_path.replace(self.state_file)
-            
+
         except (IOError, OSError) as e:
             # If we created a temp file but failed to rename, clean it up
             if 'temp_path' in locals() and temp_path.exists():
@@ -175,7 +180,7 @@ class SyncStateManager:
             config_type: Type of configuration (e.g., 'agent')
         """
         pair_state = self.get_pair_state(source_dir, target_dir)
-        
+
         # Update pair metadata if provided
         if source_format:
             pair_state["source_format"] = source_format
@@ -183,7 +188,7 @@ class SyncStateManager:
             pair_state["target_format"] = target_format
         if config_type:
             pair_state["config_type"] = config_type
-            
+
         pair_state["files"][file_name] = {
             "source_mtime": source_mtime,
             "target_mtime": target_mtime,
