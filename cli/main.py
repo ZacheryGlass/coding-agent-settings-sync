@@ -121,6 +121,31 @@ Examples:
         help='Output file path for single-file conversion (auto-generated if not specified)'
     )
 
+    # Single-file in-place sync mode
+    parser.add_argument(
+        '--sync-file',
+        type=Path,
+        help='Source file to sync (for in-place merge mode)'
+    )
+
+    parser.add_argument(
+        '--target-file',
+        type=Path,
+        help='Target file to sync with (for in-place merge mode)'
+    )
+
+    parser.add_argument(
+        '--in-place',
+        action='store_true',
+        help='Enable in-place merge mode (merge changes instead of replacing)'
+    )
+
+    parser.add_argument(
+        '--bidirectional',
+        action='store_true',
+        help='Sync changes in both directions (source to target and target to source)'
+    )
+
     # Directory sync mode arguments (required for directory sync, not for file conversion)
     parser.add_argument(
         '--source-dir',
@@ -407,7 +432,83 @@ def main(argv: Optional[list] = None):
         if args.source_dir:
             print("Error: --convert-file and --source-dir are mutually exclusive", file=sys.stderr)
             return EXIT_ERROR
-        return convert_single_file(args)
+    # Route to in-place file sync mode if --sync-file is specified
+    if args.sync_file:
+        # Validate mutual exclusivity
+        if args.convert_file or args.source_dir or args.target_dir:
+            print("Error: --sync-file is mutually exclusive with --convert-file and directory sync", file=sys.stderr)
+            return EXIT_ERROR
+        if not args.target_file:
+            print("Error: --target-file is required when using --sync-file", file=sys.stderr)
+            return EXIT_ERROR
+        if not args.source_format or not args.target_format:
+            print("Error: --source-format and --target-format are required for in-place sync", file=sys.stderr)
+            return EXIT_ERROR
+
+        try:
+            # Expand and validate paths
+            source_file = args.sync_file.expanduser().resolve()
+            target_file = args.target_file.expanduser().resolve()
+
+            if not source_file.exists():
+                print(f"Error: Source file does not exist: {source_file}", file=sys.stderr)
+                return EXIT_ERROR
+
+            if not target_file.exists():
+                print(f"Error: Target file does not exist: {target_file}", file=sys.stderr)
+                return EXIT_ERROR
+
+            # Get config type
+            config_type = CONFIG_TYPE_MAP[args.config_type]
+
+            # Setup registry
+            registry = setup_registry()
+
+            # Create state manager
+            state_file = args.state_file.expanduser().resolve() if args.state_file else None
+            state_manager = SyncStateManager(state_file=state_file)
+
+            # Build conversion options
+            conversion_options = _build_conversion_options(args)
+
+            # Create orchestrator
+            orchestrator = UniversalSyncOrchestrator(
+                source_dir=source_file.parent,  # Use parent directory for compatibility
+                target_dir=target_file.parent,
+                source_format=args.source_format,
+                target_format=args.target_format,
+                config_type=config_type,
+                format_registry=registry,
+                state_manager=state_manager,
+                direction='both',
+                dry_run=args.dry_run,
+                force=args.force,
+                verbose=args.verbose,
+                conversion_options=conversion_options if conversion_options else None
+            )
+
+            # Run in-place sync
+            orchestrator.sync_files_in_place(
+                source_path=source_file,
+                target_path=target_file,
+                bidirectional=args.bidirectional,
+                dry_run=args.dry_run
+            )
+
+            return EXIT_SUCCESS
+
+        except KeyboardInterrupt:
+            print("
+Sync cancelled by user", file=sys.stderr)
+            return EXIT_ERROR
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            if args.verbose:
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+            else:
+                print("Run with --verbose for detailed traceback", file=sys.stderr)
+            return EXIT_ERROR
 
     # Directory sync mode - validate required arguments
     if not args.source_dir:

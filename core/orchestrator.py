@@ -621,3 +621,204 @@ class UniversalSyncOrchestrator:
         # Fallback to stem for files without extension or non-matching extension
         # Path.stem handles .hidden files by returning the full name
         return file_path.stem
+
+    def sync_files_in_place(self, source_path, target_path, bidirectional=False, dry_run=False):
+        """Sync two live config files in-place with intelligent merging.
+
+        This method enables true bidirectional sync where changes from source are merged
+        into target (rather than replacing the entire target file). Optionally, changes
+        from target can be merged back into source.
+
+        Args:
+            source_path: Path to source config file
+            target_path: Path to target config file
+            bidirectional: If True, sync changes both ways
+            dry_run: If True, show changes without writing
+        """
+        self.log(f"Syncing files in-place (merge mode):")
+        self.log(f"  Source: {source_path}")
+        self.log(f"  Target: {target_path}")
+        if bidirectional:
+            self.log(f"  Direction: bidirectional (merge both ways)")
+        else:
+            self.log(f"  Direction: {self.source_format} -> {self.target_format}")
+        if dry_run:
+            self.log("  Mode: DRY RUN (no changes will be made)")
+        self.logger()
+
+        try:
+            # Validate files exist
+            if not source_path.exists():
+                raise IOError(f"Source file not found: {source_path}")
+            if not target_path.exists():
+                raise IOError(f"Target file not found: {target_path}")
+
+            # 1. Read both files
+            source_content = source_path.read_text(encoding='utf-8')
+            target_content = target_path.read_text(encoding='utf-8')
+
+            # 2. Convert both to canonical
+            source_canonical = self.source_adapter.read(source_path, self.config_type)
+            target_canonical = self.target_adapter.read(target_path, self.config_type)
+
+            # 3. Merge source into target
+            merged_canonical = self._merge_canonical(
+                source=source_canonical,
+                target=target_canonical,
+                config_type=self.config_type
+            )
+
+            # 4. Convert merged result back to target format
+            merged_content = self.target_adapter.from_canonical(
+                merged_canonical, self.config_type,
+                self.conversion_options if self.conversion_options else None
+            )
+
+            # 5. Write target (unless dry run)
+            if not dry_run:
+                target_path.write_text(merged_content, encoding='utf-8')
+                self.logger(f"Updated {self.target_format}: {target_path}")
+            else:
+                if merged_content != target_content:
+                    self.logger(f"Would update {self.target_format}: {target_path}")
+                else:
+                    self.logger(f"No changes needed for {self.target_format}: {target_path}")
+
+            self.stats['source_to_target'] += 1
+
+            # 6. If bidirectional, merge target changes back into source
+            if bidirectional:
+                merged_target_canonical = self.target_adapter.read(target_path, self.config_type) if not dry_run else merged_canonical
+
+                # Merge target into source
+                source_merged_canonical = self._merge_canonical(
+                    source=merged_target_canonical,
+                    target=source_canonical,
+                    config_type=self.config_type
+                )
+
+                # Convert back to source format
+                source_merged_content = self.source_adapter.from_canonical(
+                    source_merged_canonical, self.config_type,
+                    self.conversion_options if self.conversion_options else None
+                )
+
+                # Write source (unless dry run)
+                if not dry_run:
+                    source_path.write_text(source_merged_content, encoding='utf-8')
+                    self.logger(f"Updated {self.source_format}: {source_path}")
+                else:
+                    if source_merged_content != source_content:
+                        self.logger(f"Would update {self.source_format}: {source_path}")
+                    else:
+                        self.logger(f"No changes needed for {self.source_format}: {source_path}")
+
+                self.stats['target_to_source'] += 1
+
+            self._print_summary()
+
+        except (IOError, ValueError, RuntimeError) as e:
+            self.logger(f"Error syncing files: {e}")
+            self.stats['errors'] += 1
+            raise
+        except Exception as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.logger(f"Unexpected error syncing files: {e}")
+            self.stats['errors'] += 1
+            raise
+
+    def _merge_canonical(self, source, target, config_type):
+        """Intelligently merge source canonical model into target.
+
+        Strategy depends on config_type:
+        - PERMISSION: Merge permission arrays (add new rules, preserve existing)
+        - AGENT: Match by name, update if source has newer content
+        - SLASH_COMMAND: Match by name, update if source has newer content
+        """
+        if config_type == ConfigType.PERMISSION:
+            return self._merge_permissions(source, target)
+        elif config_type == ConfigType.AGENT:
+            return self._merge_agents(source, target)
+        elif config_type == ConfigType.SLASH_COMMAND:
+            return self._merge_slash_commands(source, target)
+        else:
+            raise ValueError(f"Unknown config type: {config_type}")
+
+    def _merge_permissions(self, source, target):
+        """Merge permission rules from source into target.
+
+        Logic:
+        - Add new rules from source to target (avoid duplicates)
+        - Preserve all target rules not in source
+        """
+        merged_allow = target.allow.copy()
+        merged_deny = target.deny.copy()
+        merged_ask = target.ask.copy()
+
+        for rule in source.allow:
+            if rule not in merged_allow:
+                merged_allow.append(rule)
+
+        for rule in source.deny:
+            if rule not in merged_deny:
+                merged_deny.append(rule)
+
+        for rule in source.ask:
+            if rule not in merged_ask:
+                merged_ask.append(rule)
+
+        merged = CanonicalPermission(
+            allow=merged_allow,
+            deny=merged_deny,
+            ask=merged_ask,
+            default_mode=target.default_mode or source.default_mode,
+            metadata=target.metadata.copy()
+        )
+
+        return merged
+
+    def _merge_agents(self, source, target):
+        """Merge agent from source into target.
+
+        For single-file sync, source agent replaces target agent entirely.
+        """
+        merged = CanonicalAgent(
+            name=source.name,
+            description=source.description,
+            instructions=source.instructions,
+            tools=source.tools.copy() if source.tools else [],
+            model=source.model or target.model,
+            metadata=target.metadata.copy(),
+            source_format=target.source_format,
+            version=source.version
+        )
+
+        for key, value in source.metadata.items():
+            if key not in merged.metadata:
+                merged.metadata[key] = value
+
+        return merged
+
+    def _merge_slash_commands(self, source, target):
+        """Merge slash command from source into target.
+
+        For single-file sync, source command replaces target command entirely.
+        """
+        merged = CanonicalSlashCommand(
+            name=source.name,
+            description=source.description,
+            instructions=source.instructions,
+            argument_hint=source.argument_hint or target.argument_hint,
+            model=source.model or target.model,
+            allowed_tools=source.allowed_tools.copy() if source.allowed_tools else [],
+            metadata=target.metadata.copy(),
+            source_format=target.source_format,
+            version=source.version
+        )
+
+        for key, value in source.metadata.items():
+            if key not in merged.metadata:
+                merged.metadata[key] = value
+
+        return merged
