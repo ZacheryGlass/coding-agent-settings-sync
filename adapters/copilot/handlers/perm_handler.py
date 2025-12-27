@@ -140,6 +140,9 @@ class CopilotPermissionHandler(ConfigTypeHandler):
         metadata = {}
 
         for pattern, approved in terminal_settings.items():
+            if not pattern:
+                continue
+
             claude_rule = self._convert_terminal_pattern(pattern)
 
             if approved is True:
@@ -165,6 +168,9 @@ class CopilotPermissionHandler(ConfigTypeHandler):
         split_approvals = []
 
         for url_pattern, approval in url_settings.items():
+            if not url_pattern:
+                continue
+
             if isinstance(approval, bool):
                 # Simple boolean approval
                 claude_rule = self._convert_url_pattern(url_pattern)
@@ -212,6 +218,9 @@ class CopilotPermissionHandler(ConfigTypeHandler):
         Returns:
             Claude permission rule (e.g., "Bash(mkdir:*)" or "Bash(/^git.*$/)")
         """
+        if not pattern:
+            raise ValueError("Pattern cannot be empty")
+
         if pattern.startswith('/') and pattern.endswith('/'):
             # Already regex - wrap in Bash()
             return f"Bash({pattern})"
@@ -231,6 +240,9 @@ class CopilotPermissionHandler(ConfigTypeHandler):
         Returns:
             Claude permission rule (e.g., "WebFetch(domain:*.github.com)")
         """
+        if not url_pattern:
+            raise ValueError("URL pattern cannot be empty")
+
         # Extract domain from URL
         # VS Code: "https://www.example.com" or "https://*.contoso.com/*"
         # Claude: "WebFetch(domain:www.example.com)" or "WebFetch(domain:*.contoso.com)"
