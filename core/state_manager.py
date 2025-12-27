@@ -13,6 +13,8 @@ work across multiple projects and repositories.
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 from datetime import datetime
@@ -24,6 +26,7 @@ class SyncStateManager:
 
     State format:
     {
+      "version": 1,
       "sync_pairs": {
         "/home/user/.claude/agents|/home/user/project/.github/agents": {
           "last_sync": "2025-01-15T10:30:00Z",
@@ -66,19 +69,54 @@ class SyncStateManager:
         Returns:
             State dictionary or empty structure if file doesn't exist
         """
+        default_state = {"version": 1, "sync_pairs": {}}
+        
         if self.state_file.exists():
             try:
                 with open(self.state_file, 'r') as f:
-                    return json.load(f)
+                    state = json.load(f)
+                    # Add version if missing (migration strategy)
+                    if "version" not in state:
+                        state["version"] = 1
+                    return state
             except json.JSONDecodeError:
                 # Corrupted state file, start fresh
-                return {"sync_pairs": {}}
-        return {"sync_pairs": {}}
+                return default_state
+        return default_state
 
     def save(self):
-        """Save current state to file."""
-        with open(self.state_file, 'w') as f:
-            json.dump(self.state, f, indent=2)
+        """
+        Save current state to file.
+        
+        Uses atomic write (write to temp file then rename) to prevent corruption.
+        Sets secure permissions (600) on the file.
+        """
+        try:
+            # Create temp file in same directory to ensure atomic rename works
+            # (rename across filesystems can fail)
+            directory = self.state_file.parent
+            if not directory.exists():
+                directory.mkdir(parents=True, exist_ok=True)
+                
+            with tempfile.NamedTemporaryFile('w', dir=directory, delete=False) as tf:
+                json.dump(self.state, tf, indent=2)
+                temp_path = Path(tf.name)
+            
+            # Set permissions to read/write for owner only
+            os.chmod(temp_path, 0o600)
+            
+            # Atomic rename
+            temp_path.replace(self.state_file)
+            
+        except (IOError, OSError) as e:
+            # If we created a temp file but failed to rename, clean it up
+            if 'temp_path' in locals() and temp_path.exists():
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+            # Re-raise to let caller know save failed
+            raise IOError(f"Failed to save state file: {e}")
 
     def get_pair_key(self, source_dir: Path, target_dir: Path) -> str:
         """
@@ -118,7 +156,10 @@ class SyncStateManager:
                          file_name: str,
                          source_mtime: Optional[float],
                          target_mtime: Optional[float],
-                         action: str):
+                         action: str,
+                         source_format: Optional[str] = None,
+                         target_format: Optional[str] = None,
+                         config_type: Optional[str] = None):
         """
         Update state for a specific file after sync.
 
@@ -129,8 +170,20 @@ class SyncStateManager:
             source_mtime: Source file modification time
             target_mtime: Target file modification time
             action: Sync action performed (source_to_target, target_to_source, etc.)
+            source_format: Format of source files (e.g., 'claude')
+            target_format: Format of target files (e.g., 'copilot')
+            config_type: Type of configuration (e.g., 'agent')
         """
         pair_state = self.get_pair_state(source_dir, target_dir)
+        
+        # Update pair metadata if provided
+        if source_format:
+            pair_state["source_format"] = source_format
+        if target_format:
+            pair_state["target_format"] = target_format
+        if config_type:
+            pair_state["config_type"] = config_type
+            
         pair_state["files"][file_name] = {
             "source_mtime": source_mtime,
             "target_mtime": target_mtime,

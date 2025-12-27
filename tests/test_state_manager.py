@@ -14,6 +14,9 @@ Tests cover:
 
 import pytest
 import json
+import os
+import stat
+from unittest import mock
 from pathlib import Path
 
 from core.state_manager import SyncStateManager
@@ -75,7 +78,7 @@ class TestSyncStateManager:
         """Test loading when state file doesn't exist returns empty structure."""
         assert not state_file.exists()
         manager = SyncStateManager(state_file)
-        assert manager.state == {"sync_pairs": {}}
+        assert manager.state == {"version": 1, "sync_pairs": {}}
 
     def test_load_existing_state(self, state_file):
         """Test loading pre-existing valid JSON state."""
@@ -97,7 +100,9 @@ class TestSyncStateManager:
         state_file.write_text(json.dumps(existing_state))
 
         manager = SyncStateManager(state_file)
-        assert manager.state == existing_state
+        # Should add version: 1 automatically
+        assert manager.state["version"] == 1
+        assert manager.state["sync_pairs"] == existing_state["sync_pairs"]
         assert "/source|/target" in manager.state["sync_pairs"]
         assert manager.state["sync_pairs"]["/source|/target"]["files"]["agent1"]["source_mtime"] == 12345.0
 
@@ -106,14 +111,14 @@ class TestSyncStateManager:
         state_file.write_text("{ invalid json content }")
 
         manager = SyncStateManager(state_file)
-        assert manager.state == {"sync_pairs": {}}
+        assert manager.state == {"version": 1, "sync_pairs": {}}
 
     def test_load_empty_file(self, state_file):
         """Test empty file returns empty structure."""
         state_file.write_text("")
 
         manager = SyncStateManager(state_file)
-        assert manager.state == {"sync_pairs": {}}
+        assert manager.state == {"version": 1, "sync_pairs": {}}
 
     # =========================================================================
     # Phase 3: State Saving Tests
@@ -453,3 +458,44 @@ class TestSyncStateManager:
         # Verify no cross-contamination
         assert state_manager.get_file_state(source1, target1, "agent-pair2") is None
         assert state_manager.get_file_state(source2, target2, "agent-pair1") is None
+
+    # =========================================================================
+    # Phase 9: New Feature Tests (Metadata, Permissions, Errors)
+    # =========================================================================
+
+    def test_update_file_state_with_metadata(self, state_manager, source_dir, target_dir):
+        """Test saving metadata (formats, config type) to pair state."""
+        state_manager.update_file_state(
+            source_dir, target_dir,
+            "meta-agent",
+            source_mtime=123.0,
+            target_mtime=456.0,
+            action="source_to_target",
+            source_format="claude",
+            target_format="copilot",
+            config_type="agent"
+        )
+
+        pair_state = state_manager.get_pair_state(source_dir, target_dir)
+        assert pair_state["source_format"] == "claude"
+        assert pair_state["target_format"] == "copilot"
+        assert pair_state["config_type"] == "agent"
+
+    def test_save_permissions(self, state_manager, state_file):
+        """Test state file is saved with restrictive permissions (0600)."""
+        state_manager.state["sync_pairs"]["test"] = {}
+        state_manager.save()
+        
+        # Check permissions
+        if os.name == 'posix':
+            st = os.stat(state_file)
+            assert stat.S_IMODE(st.st_mode) == 0o600
+
+    def test_save_error_handling(self, state_manager):
+        """Test save handles I/O errors gracefully."""
+        # Mock NamedTemporaryFile to raise OSError
+        with mock.patch('tempfile.NamedTemporaryFile') as mock_temp:
+            mock_temp.side_effect = OSError("Disk full")
+            
+            with pytest.raises(IOError, match="Failed to save state file"):
+                state_manager.save()
