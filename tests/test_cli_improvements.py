@@ -43,13 +43,6 @@ class TestCLIImprovements:
         captured = capsys.readouterr()
         assert VERSION in captured.out
 
-    def test_gui_exclusivity(self, capsys):
-        """Test --gui flag cannot be combined with other arguments."""
-        result = main(['--gui', '--source-dir', 'some/dir'])
-        assert result == EXIT_ERROR
-        captured = capsys.readouterr()
-        assert "Error: --gui cannot be combined with other arguments" in captured.err
-
     def test_same_source_output_error(self, tmp_path, capsys):
         """Test error when source and output files are the same."""
         source_file = tmp_path / "test.agent.md"

@@ -222,12 +222,6 @@ Examples:
         help='Add handoffs placeholder (only when converting to Copilot)'
     )
 
-    parser.add_argument(
-        '--gui',
-        action='store_true',
-        help='Launch the graphical user interface (default when no arguments provided)'
-    )
-
     return parser
 
 
@@ -392,29 +386,6 @@ def main(argv: Optional[list] = None):
     """
     if argv is None:
         argv = sys.argv[1:]
-
-    # Check for GUI launch conditions:
-    # 1. Explicit --gui flag
-    # 2. No arguments provided (default to GUI)
-    if '--gui' in argv or not argv:
-        # Finding #5: Validate exclusivity
-        if '--gui' in argv and len(argv) > 1:
-            print("Error: --gui cannot be combined with other arguments", file=sys.stderr)
-            return EXIT_ERROR
-
-        try:
-            from gui.main import start as start_gui
-            if not argv:
-                print("No arguments provided, launching GUI...")
-            start_gui()
-            return EXIT_SUCCESS
-        except ImportError as e:
-            print(f"Error: Could not import GUI: {e}", file=sys.stderr)
-            print("Ensure nicegui is installed: pip install nicegui", file=sys.stderr)
-            return EXIT_ERROR
-        except Exception as e:
-            print("Error launching GUI: {e}", file=sys.stderr)
-            return EXIT_ERROR
 
     registry = setup_registry()
     parser = create_parser(registry)
