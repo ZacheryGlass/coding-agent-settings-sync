@@ -36,39 +36,76 @@ CONFIG_TYPE_MAP = {
     'slash-command': ConfigType.SLASH_COMMAND
 }
 
+# Exit codes
+EXIT_SUCCESS = 0
+EXIT_ERROR = 1
 
-def create_parser() -> argparse.ArgumentParser:
+
+VERSION = "1.1.0"
+
+
+def _build_conversion_options(args: argparse.Namespace) -> dict:
+    """
+    Build conversion options dictionary from command-line arguments.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Dictionary of conversion options
+    """
+    options = {}
+    if args.add_argument_hint:
+        options['add_argument_hint'] = True
+    if args.add_handoffs:
+        options['add_handoffs'] = True
+    return options
+
+
+def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.ArgumentParser:
     """
     Create argument parser for CLI.
+
+    Args:
+        registry: Optional FormatRegistry to get dynamic format choices
 
     Returns:
         Configured ArgumentParser instance
     """
+    formats = registry.list_formats() if registry else ['claude', 'copilot']
+
     parser = argparse.ArgumentParser(
         description='Universal sync tool for AI coding agent configurations',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Sync Claude agents to Copilot
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
-           --source-format claude --target-format copilot \\
+  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
+           --source-format claude --target-format copilot \
            --config-type agent
 
   # Sync Claude permissions to Copilot
-  %(prog)s --source-dir ~/.claude --target-dir .github \\
-           --source-format claude --target-format copilot \\
+  %(prog)s --source-dir ~/.claude --target-dir .github \
+           --source-format claude --target-format copilot \
            --config-type permission
 
-  # Sync Claude slash commands to Copilot
-  %(prog)s --source-dir ~/.claude/commands --target-dir .github/prompts \\
-           --source-format claude --target-format copilot \\
-           --config-type slash-command
+  # Single file conversion (auto-detect source, auto-generate output)
+  %(prog)s --convert-file ~/.claude/agents/planner.md --target-format copilot
+
+  # Single file conversion with explicit output
+  %(prog)s --convert-file agent.md --output agent.agent.md --target-format copilot
 
   # Bidirectional sync with dry-run
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
-           --source-format claude --target-format copilot \\
+  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
+           --source-format claude --target-format copilot \
            --config-type agent --direction both --dry-run
         """
+    )
+
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {VERSION}'
     )
 
     # Single-file conversion mode
@@ -101,14 +138,14 @@ Examples:
     parser.add_argument(
         '--source-format',
         type=str,
-        choices=['claude', 'copilot'],
+        choices=formats,
         help='Source format name (auto-detected if not specified)'
     )
 
     parser.add_argument(
         '--target-format',
         type=str,
-        choices=['claude', 'copilot'],
+        choices=formats,
         help='Target format name (auto-detected from output if not specified)'
     )
 
@@ -157,19 +194,19 @@ Examples:
     parser.add_argument(
         '--add-argument-hint',
         action='store_true',
-        help='[Copilot] Add argument-hint field when converting to Copilot'
+        help='Add argument-hint field (only when converting to Copilot)'
     )
 
     parser.add_argument(
         '--add-handoffs',
         action='store_true',
-        help='[Copilot] Add handoffs placeholder when converting to Copilot'
+        help='Add handoffs placeholder (only when converting to Copilot)'
     )
 
     parser.add_argument(
         '--gui',
         action='store_true',
-        help='Launch the graphical user interface'
+        help='Launch the graphical user interface (default when no arguments provided)'
     )
 
     return parser
@@ -224,46 +261,50 @@ def convert_single_file(args) -> int:
             print(f"Error: Cannot auto-detect format for: {source_file}", file=sys.stderr)
             return 1
 
-    # 3. Determine target adapter (explicit or from output extension)
+    # 3. Get config type
+    config_type = CONFIG_TYPE_MAP[args.config_type]
+
+    # 4. Determine target adapter (explicit or from output extension)
     if args.target_format:
         target_adapter = registry.get_adapter(args.target_format)
         if not target_adapter:
             print(f"Error: Unknown target format: {args.target_format}", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
     elif args.output:
         target_adapter = registry.detect_format(args.output)
         if not target_adapter:
             print(f"Error: Cannot auto-detect target format from: {args.output}", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
     else:
         print("Error: --target-format or --output required for conversion", file=sys.stderr)
-        return 1
-
-    # 4. Get config type
-    config_type = CONFIG_TYPE_MAP[args.config_type]
+        return EXIT_ERROR
 
     # 5. Determine output path (explicit or auto-generate)
     if args.output:
         output_file = args.output.expanduser().resolve()
     else:
         # Auto-generate: same directory, base name + target extension
-        source_ext = source_adapter.get_file_extension(config_type)
-        if source_file.name.endswith(source_ext):
-            base_name = source_file.name[:-len(source_ext)]
-        else:
-            base_name = source_file.stem
-        
+        filename = source_file.name
+        base_name = source_file.stem
+
+        # Handle multi-part extensions
+        for ext in ['.agent.md', '.prompt.md', '.perm.json']:
+            if filename.endswith(ext):
+                base_name = filename[:-len(ext)]
+                break
+
         target_ext = target_adapter.get_file_extension(config_type)
         output_file = source_file.parent / f"{base_name}{target_ext}"
 
-    # 6. Build conversion options
-    conversion_options = {}
-    if getattr(args, 'add_argument_hint', False):
-        conversion_options['add_argument_hint'] = True
-    if getattr(args, 'add_handoffs', False):
-        conversion_options['add_handoffs'] = True
+    # 6. Check if source and output are the same (Find #8)
+    if source_file == output_file:
+        print(f"Error: Source and output files are the same: {source_file}", file=sys.stderr)
+        return EXIT_ERROR
 
-    # 7. Perform conversion
+    # 7. Build conversion options
+    conversion_options = _build_conversion_options(args)
+
+    # 8. Perform conversion
     try:
         if args.verbose:
             print(f"Converting {source_file} -> {output_file}")
@@ -283,31 +324,41 @@ def convert_single_file(args) -> int:
             if args.verbose:
                 print("--- Output content ---")
                 print(output_content)
-            return 0
+            return EXIT_SUCCESS
 
         # Write output
+        # Find #7: Check for write permissions before attempting write
         output_file.parent.mkdir(parents=True, exist_ok=True)
+        if not os.access(output_file.parent, os.W_OK):
+             print(f"Error: Permission denied: Cannot write to directory {output_file.parent}", file=sys.stderr)
+             return EXIT_ERROR
+
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(output_content)
         except PermissionError:
             print(f"Error: Permission denied writing to {output_file}", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
         except FileNotFoundError:
             print(f"Error: Could not find directory for {output_file}", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
 
         if args.verbose:
             print(f"Successfully converted to {output_file}")
 
-        return 0
+        return EXIT_SUCCESS
 
+    except KeyboardInterrupt:
+        print("\nConversion cancelled by user", file=sys.stderr)
+        return EXIT_ERROR
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         if args.verbose:
             import traceback
             traceback.print_exc(file=sys.stderr)
-        return 1
+        else:
+            print("Run with --verbose for detailed traceback", file=sys.stderr)
+        return EXIT_ERROR
 
 
 def main(argv: Optional[list] = None):
@@ -327,19 +378,27 @@ def main(argv: Optional[list] = None):
     # 1. Explicit --gui flag
     # 2. No arguments provided (default to GUI)
     if '--gui' in argv or not argv:
+        # Finding #5: Validate exclusivity
+        if '--gui' in argv and len(argv) > 1:
+            print("Error: --gui cannot be combined with other arguments", file=sys.stderr)
+            return EXIT_ERROR
+
         try:
             from gui.main import start as start_gui
+            if not argv:
+                print("No arguments provided, launching GUI...")
             start_gui()
-            return 0
+            return EXIT_SUCCESS
         except ImportError as e:
             print(f"Error: Could not import GUI: {e}", file=sys.stderr)
             print("Ensure nicegui is installed: pip install nicegui", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
         except Exception as e:
-            print(f"Error launching GUI: {e}", file=sys.stderr)
-            return 1
+            print("Error launching GUI: {e}", file=sys.stderr)
+            return EXIT_ERROR
 
-    parser = create_parser()
+    registry = setup_registry()
+    parser = create_parser(registry)
     args = parser.parse_args(argv)
 
     # Route to single-file conversion mode if --convert-file is specified
@@ -347,22 +406,22 @@ def main(argv: Optional[list] = None):
         # Validate mutual exclusivity
         if args.source_dir:
             print("Error: --convert-file and --source-dir are mutually exclusive", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
         return convert_single_file(args)
 
     # Directory sync mode - validate required arguments
     if not args.source_dir:
         print("Error: --source-dir is required for directory sync", file=sys.stderr)
-        return 1
+        return EXIT_ERROR
     if not args.target_dir:
         print("Error: --target-dir is required for directory sync", file=sys.stderr)
-        return 1
+        return EXIT_ERROR
     if not args.source_format:
         print("Error: --source-format is required for directory sync", file=sys.stderr)
-        return 1
+        return EXIT_ERROR
     if not args.target_format:
         print("Error: --target-format is required for directory sync", file=sys.stderr)
-        return 1
+        return EXIT_ERROR
 
     try:
         # 1. Expand and validate paths
@@ -371,26 +430,26 @@ def main(argv: Optional[list] = None):
 
         if not source_dir.exists():
             print(f"Error: Source directory does not exist: {source_dir}", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
 
         if not source_dir.is_dir():
             print(f"Error: Source path is not a directory: {source_dir}", file=sys.stderr)
-            return 1
+            return EXIT_ERROR
 
         # Target directory doesn't need to exist (will be created if needed)
         # but if it exists, it must be a directory and writable
         if target_dir.exists():
             if not target_dir.is_dir():
                 print(f"Error: Target path exists but is not a directory: {target_dir}", file=sys.stderr)
-                return 1
+                return EXIT_ERROR
             if not os.access(target_dir, os.W_OK):
                 print(f"Error: Target directory is not writable: {target_dir}", file=sys.stderr)
-                return 1
+                return EXIT_ERROR
         else:
             # If it doesn't exist, check if parent is writable
             if not os.access(target_dir.parent, os.W_OK):
                 print(f"Error: Target parent directory is not writable: {target_dir.parent}", file=sys.stderr)
-                return 1
+                return EXIT_ERROR
 
         # 2. Convert config_type string to ConfigType enum
         config_type = CONFIG_TYPE_MAP[args.config_type]
@@ -403,11 +462,7 @@ def main(argv: Optional[list] = None):
         state_manager = SyncStateManager(state_file=state_file)
 
         # 5. Build conversion options
-        conversion_options = {}
-        if args.add_argument_hint:
-            conversion_options['add_argument_hint'] = True
-        if args.add_handoffs:
-            conversion_options['add_handoffs'] = True
+        conversion_options = _build_conversion_options(args)
 
         # 6. Create orchestrator
         orchestrator = UniversalSyncOrchestrator(
@@ -429,17 +484,19 @@ def main(argv: Optional[list] = None):
         orchestrator.sync()
 
         # Success
-        return 0
+        return EXIT_SUCCESS
 
     except KeyboardInterrupt:
         print("\nSync cancelled by user", file=sys.stderr)
-        return 1
+        return EXIT_ERROR
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         if args.verbose:
             import traceback
             traceback.print_exc(file=sys.stderr)
-        return 1
+        else:
+            print("Run with --verbose for detailed traceback", file=sys.stderr)
+        return EXIT_ERROR
 
 
 if __name__ == '__main__':

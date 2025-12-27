@@ -13,6 +13,7 @@ This replaces the format-specific AgentSyncer with a universal version
 that works with any formats through the adapter interface.
 """
 
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -173,7 +174,13 @@ class UniversalSyncOrchestrator:
             return
 
         # Process each pair
-        for pair in pairs:
+        total = len(pairs)
+        for i, pair in enumerate(pairs, 1):
+            if not self.verbose:
+                # Progress indication (Finding #20)
+                sys.stdout.write(f"\rProcessing: [{i}/{total}] {pair.base_name}")
+                sys.stdout.flush()
+
             action = self._determine_action(pair)
 
             if action == 'skip':
@@ -203,6 +210,11 @@ class UniversalSyncOrchestrator:
 
             # Execute the sync action
             self._execute_sync_action(pair, action)
+
+        if not self.verbose and total > 0:
+            # Clear progress line
+            sys.stdout.write("\r" + " " * 80 + "\r")
+            sys.stdout.flush()
 
         # Save state (unless dry run)
         if not self.dry_run:

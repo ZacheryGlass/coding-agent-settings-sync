@@ -986,6 +986,7 @@ class TestCLIPermissionSupport:
             mock_target_adapter.get_file_extension.return_value = ".perm.json"
             mock_target_adapter.from_canonical.return_value = "mock content"
             
+            mock_registry.list_formats.return_value = ['claude', 'copilot']
             mock_registry.get_adapter.side_effect = lambda fmt: {
                 'claude': mock_source_adapter,
                 'copilot': mock_target_adapter
