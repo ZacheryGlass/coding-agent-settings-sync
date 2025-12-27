@@ -67,6 +67,23 @@ class TestClaudePermissionAdapter:
         assert isinstance(perm, CanonicalPermission)
         assert perm.allow == []
 
+    def test_null_permission_values(self, adapter):
+        """Test that null permission values are converted to empty lists."""
+        content = '{"permissions": {"allow": null, "deny": null, "ask": null}}'
+        perm = adapter.to_canonical(content, ConfigType.PERMISSION)
+        
+        assert isinstance(perm, CanonicalPermission)
+        assert perm.allow == []
+        assert perm.deny == []
+        assert perm.ask == []
+
+        # Round-trip should produce empty lists in JSON, not null
+        output = adapter.from_canonical(perm, ConfigType.PERMISSION)
+        data = json.loads(output)
+        assert data["permissions"]["allow"] == []
+        assert data["permissions"]["deny"] == []
+        assert data["permissions"]["ask"] == []
+
 class TestCopilotPermissionAdapter:
     @pytest.fixture
     def adapter(self):
