@@ -400,6 +400,14 @@ class UniversalSyncOrchestrator:
         """
         try:
             if action == 'source_to_target':
+                # Race condition check: Verify target hasn't changed since discovery
+                if pair.target_path and pair.target_path.exists():
+                    current_mtime = pair.target_path.stat().st_mtime
+                    if pair.target_mtime and current_mtime > pair.target_mtime:
+                        self.logger(f"  Skipped: {pair.base_name} (Target modified since discovery)")
+                        self.stats['skipped'] += 1
+                        return
+
                 # Read source and convert to canonical
                 canonical = self.source_adapter.read(pair.source_path, self.config_type)
 
@@ -434,6 +442,14 @@ class UniversalSyncOrchestrator:
                 self.stats['source_to_target'] += 1
 
             elif action == 'target_to_source':
+                # Race condition check: Verify source hasn't changed since discovery
+                if pair.source_path and pair.source_path.exists():
+                    current_mtime = pair.source_path.stat().st_mtime
+                    if pair.source_mtime and current_mtime > pair.source_mtime:
+                        self.logger(f"  Skipped: {pair.base_name} (Source modified since discovery)")
+                        self.stats['skipped'] += 1
+                        return
+
                 # Read target and convert to canonical
                 canonical = self.target_adapter.read(pair.target_path, self.config_type)
 
